@@ -36,10 +36,11 @@ async def main() -> None:
     )
 
     bot = Bot(token=settings.telegram_bot_token.get_secret_value())
-    dispatcher = create_dispatcher(settings)
     engine = create_async_engine(settings.database_url)
     async with engine.begin() as connection:
         await connection.run_sync(Base.metadata.create_all)
+    store = SqlAlchemyVacancyStore(async_sessionmaker(engine, expire_on_commit=False))
+    dispatcher = create_dispatcher(settings, store)
 
     poll_task: asyncio.Task[None] | None = None
     client: httpx.AsyncClient | None = None
@@ -47,7 +48,7 @@ async def main() -> None:
         client = httpx.AsyncClient(timeout=settings.hh_request_timeout_seconds)
         pipeline = VacancyPipeline(
             source=HeadHunterSource(client, user_agent=settings.hh_user_agent),
-            store=SqlAlchemyVacancyStore(async_sessionmaker(engine, expire_on_commit=False)),
+            store=store,
             notifier=TelegramNotifier(bot, settings.telegram_recipient_chat_id),
             eligibility_filter=EligibilityFilter(),
         )

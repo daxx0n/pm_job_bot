@@ -3,7 +3,7 @@ from __future__ import annotations
 from datetime import UTC, datetime
 from typing import Protocol
 
-from sqlalchemy import JSON, DateTime, String, UniqueConstraint, select, update
+from sqlalchemy import JSON, DateTime, ForeignKey, String, UniqueConstraint, select, update
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 from sqlalchemy.orm import DeclarativeBase, Mapped, mapped_column
 
@@ -17,6 +17,12 @@ class VacancyStore(Protocol):
 
     async def complete(self, vacancy: Vacancy, *, notified: bool) -> None:
         """Mark filtering as complete and optionally record successful delivery."""
+        ...
+
+
+class VacancyFeedbackStore(Protocol):
+    async def record_feedback(self, source: str, external_id: str, value: str) -> bool:
+        """Save feedback and return false when the referenced vacancy does not exist."""
         ...
 
 
@@ -39,6 +45,19 @@ class StoredVacancy(Base):
     )
     processed_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
     notified_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+
+
+class StoredVacancyFeedback(Base):
+    __tablename__ = "vacancy_feedback"
+
+    vacancy_id: Mapped[int] = mapped_column(
+        ForeignKey("vacancies.id", ondelete="CASCADE"),
+        primary_key=True,
+    )
+    value: Mapped[str] = mapped_column(String(30), nullable=False)
+    updated_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), default=lambda: datetime.now(UTC), nullable=False
+    )
 
 
 class SqlAlchemyVacancyStore:
@@ -67,6 +86,35 @@ class SqlAlchemyVacancyStore:
                     payload=vacancy.raw,
                 )
             )
+            await session.commit()
+            return True
+
+    async def record_feedback(self, source: str, external_id: str, value: str) -> bool:
+        now = datetime.now(UTC)
+        async with self._session_factory() as session:
+            vacancy_id = (
+                await session.execute(
+                    select(StoredVacancy.id).where(
+                        StoredVacancy.source == source,
+                        StoredVacancy.external_id == external_id,
+                    )
+                )
+            ).scalar_one_or_none()
+            if vacancy_id is None:
+                return False
+
+            feedback = await session.get(StoredVacancyFeedback, vacancy_id)
+            if feedback is None:
+                session.add(
+                    StoredVacancyFeedback(
+                        vacancy_id=vacancy_id,
+                        value=value,
+                        updated_at=now,
+                    )
+                )
+            else:
+                feedback.value = value
+                feedback.updated_at = now
             await session.commit()
             return True
 
