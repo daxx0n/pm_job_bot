@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from pydantic import SecretStr
+from pydantic import SecretStr, field_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 
@@ -24,6 +24,13 @@ class Settings(BaseSettings):
         env_file_encoding="utf-8",
         extra="ignore",
     )
+
+    @field_validator("telegram_recipient_chat_id", mode="before")
+    @classmethod
+    def empty_recipient_chat_id_is_unset(cls, value: object) -> object:
+        if isinstance(value, str) and not value.strip():
+            return None
+        return value
 
     def greenhouse_board_tokens(self) -> tuple[str, ...]:
         return _csv_values(self.greenhouse_boards)
