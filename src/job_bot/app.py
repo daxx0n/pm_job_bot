@@ -11,6 +11,8 @@ from sqlalchemy.ext.asyncio import async_sessionmaker, create_async_engine
 from job_bot.domain.filtering import EligibilityFilter
 from job_bot.pipeline import VacancyPipeline
 from job_bot.settings import Settings
+from job_bot.sources.base import VacancySource
+from job_bot.sources.career_pages import CompositeSource, GreenhouseSource, LeverSource
 from job_bot.sources.headhunter import HeadHunterSource
 from job_bot.storage import Base, SqlAlchemyVacancyStore
 from job_bot.telegram.bot import TelegramNotifier, create_dispatcher
@@ -44,10 +46,19 @@ async def main() -> None:
 
     poll_task: asyncio.Task[None] | None = None
     client: httpx.AsyncClient | None = None
-    if settings.hh_enabled and settings.telegram_recipient_chat_id is not None:
+    sources: list[VacancySource] = []
+    if settings.telegram_recipient_chat_id is not None:
         client = httpx.AsyncClient(timeout=settings.hh_request_timeout_seconds)
+        if settings.hh_enabled:
+            sources.append(HeadHunterSource(client, user_agent=settings.hh_user_agent))
+        sources.extend(
+            GreenhouseSource(client, token) for token in settings.greenhouse_board_tokens()
+        )
+        sources.extend(LeverSource(client, site) for site in settings.lever_site_names())
+
+    if sources and settings.telegram_recipient_chat_id is not None:
         pipeline = VacancyPipeline(
-            source=HeadHunterSource(client, user_agent=settings.hh_user_agent),
+            source=CompositeSource(sources),
             store=store,
             notifier=TelegramNotifier(bot, settings.telegram_recipient_chat_id),
             eligibility_filter=EligibilityFilter(),
@@ -56,8 +67,8 @@ async def main() -> None:
             _poll(pipeline, settings.hh_poll_interval_seconds),
             name="headhunter-poller",
         )
-    elif settings.hh_enabled:
-        logger.warning("HeadHunter polling is disabled until TELEGRAM_RECIPIENT_CHAT_ID is set")
+    elif settings.telegram_recipient_chat_id is None:
+        logger.warning("Vacancy polling is disabled until TELEGRAM_RECIPIENT_CHAT_ID is set")
 
     try:
         await dispatcher.start_polling(bot)

@@ -45,6 +45,14 @@ PostgreSQL и в дальнейшем может использоваться д
 HeadHunter проверяется каждые 5 минут. В первой версии источник запрашивает свежие
 remote/hybrid-вакансии для Беларуси через официальный API.
 
+Карьерные страницы Greenhouse и Lever подключаются списками идентификаторов через
+`GREENHOUSE_BOARDS` и `LEVER_SITES` в `.env`, например:
+
+```dotenv
+GREENHOUSE_BOARDS=company-one,company-two
+LEVER_SITES=company-three
+```
+
 ## Управление
 
 ```bash

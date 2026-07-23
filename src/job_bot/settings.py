@@ -15,6 +15,8 @@ class Settings(BaseSettings):
     hh_poll_interval_seconds: int = 300
     hh_request_timeout_seconds: float = 20
     hh_user_agent: str = "project-manager-job-bot/0.1"
+    greenhouse_boards: str = ""
+    lever_sites: str = ""
     log_level: str = "INFO"
 
     model_config = SettingsConfigDict(
@@ -22,3 +24,13 @@ class Settings(BaseSettings):
         env_file_encoding="utf-8",
         extra="ignore",
     )
+
+    def greenhouse_board_tokens(self) -> tuple[str, ...]:
+        return _csv_values(self.greenhouse_boards)
+
+    def lever_site_names(self) -> tuple[str, ...]:
+        return _csv_values(self.lever_sites)
+
+
+def _csv_values(value: str) -> tuple[str, ...]:
+    return tuple(item.strip() for item in value.split(",") if item.strip())
