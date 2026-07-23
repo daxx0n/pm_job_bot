@@ -1,0 +1,115 @@
+import sys
+import unittest
+from collections.abc import AsyncIterator
+from pathlib import Path
+
+sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "src"))
+
+from job_bot.domain import Decision, EligibilityFilter, EmploymentFormat, Vacancy
+from job_bot.pipeline import VacancyPipeline
+
+
+class FakeSource:
+    name = "test"
+
+    def __init__(self, vacancies: list[Vacancy]) -> None:
+        self._vacancies = vacancies
+
+    async def fetch(self) -> AsyncIterator[Vacancy]:
+        for vacancy in self._vacancies:
+            yield vacancy
+
+
+class MemoryStore:
+    def __init__(self) -> None:
+        self.keys: dict[tuple[str, str], bool] = {}
+
+    async def claim(self, vacancy: Vacancy) -> bool:
+        key = (vacancy.source, vacancy.external_id)
+        if key in self.keys:
+            return not self.keys[key]
+        self.keys[key] = False
+        return True
+
+    async def complete(self, vacancy: Vacancy, *, notified: bool) -> None:
+        self.keys[(vacancy.source, vacancy.external_id)] = True
+
+
+class RecordingNotifier:
+    def __init__(self) -> None:
+        self.sent: list[tuple[Vacancy, Decision]] = []
+
+    async def send_vacancy(self, vacancy: Vacancy, decision: Decision) -> None:
+        self.sent.append((vacancy, decision))
+
+
+class FailingNotifier:
+    async def send_vacancy(self, vacancy: Vacancy, decision: Decision) -> None:
+        raise RuntimeError("temporary Telegram failure")
+
+
+class VacancyPipelineTests(unittest.IsolatedAsyncioTestCase):
+    def vacancy(self, external_id: str, **overrides: object) -> Vacancy:
+        values: dict[str, object] = {
+            "source": "test",
+            "external_id": external_id,
+            "title": "Junior Project Manager",
+            "url": f"https://example.test/{external_id}",
+            "country": "Belarus",
+            "employment_format": EmploymentFormat.REMOTE,
+            "remote_from_belarus": True,
+            "experience_min_years": 1,
+            "required_english_level": "B1",
+            "salary_min_usd": 1200,
+        }
+        values.update(overrides)
+        return Vacancy(**values)  # type: ignore[arg-type]
+
+    async def test_sends_only_new_accepted_vacancies(self) -> None:
+        accepted = self.vacancy("1")
+        rejected = self.vacancy("2", required_english_level="B2")
+        source = FakeSource([accepted, rejected])
+        store = MemoryStore()
+        notifier = RecordingNotifier()
+        pipeline = VacancyPipeline(
+            source=source,
+            store=store,
+            notifier=notifier,
+            eligibility_filter=EligibilityFilter(),
+        )
+
+        first_result = await pipeline.run_once()
+        second_result = await pipeline.run_once()
+
+        self.assertEqual(first_result, (2, 1))
+        self.assertEqual(second_result, (2, 0))
+        self.assertEqual([item[0].external_id for item in notifier.sent], ["1"])
+
+    async def test_retries_vacancy_after_notification_failure(self) -> None:
+        vacancy = self.vacancy("1")
+        store = MemoryStore()
+        failed_pipeline = VacancyPipeline(
+            source=FakeSource([vacancy]),
+            store=store,
+            notifier=FailingNotifier(),
+            eligibility_filter=EligibilityFilter(),
+        )
+
+        with self.assertRaisesRegex(RuntimeError, "temporary Telegram failure"):
+            await failed_pipeline.run_once()
+
+        notifier = RecordingNotifier()
+        retry_pipeline = VacancyPipeline(
+            source=FakeSource([vacancy]),
+            store=store,
+            notifier=notifier,
+            eligibility_filter=EligibilityFilter(),
+        )
+        result = await retry_pipeline.run_once()
+
+        self.assertEqual(result, (1, 1))
+        self.assertEqual(len(notifier.sent), 1)
+
+
+if __name__ == "__main__":
+    unittest.main()

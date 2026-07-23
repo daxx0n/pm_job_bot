@@ -1,0 +1,2 @@
+"""Vacancy source adapters."""
+

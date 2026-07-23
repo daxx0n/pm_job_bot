@@ -1,0 +1,54 @@
+from __future__ import annotations
+
+import logging
+from typing import Protocol
+
+from job_bot.domain.filtering import EligibilityFilter
+from job_bot.domain.models import Decision, Vacancy
+from job_bot.sources.base import VacancySource
+from job_bot.storage import VacancyStore
+
+logger = logging.getLogger(__name__)
+
+
+class VacancyNotifier(Protocol):
+    async def send_vacancy(self, vacancy: Vacancy, decision: Decision) -> None: ...
+
+
+class VacancyPipeline:
+    def __init__(
+        self,
+        *,
+        source: VacancySource,
+        store: VacancyStore,
+        notifier: VacancyNotifier,
+        eligibility_filter: EligibilityFilter,
+    ) -> None:
+        self._source = source
+        self._store = store
+        self._notifier = notifier
+        self._filter = eligibility_filter
+
+    async def run_once(self) -> tuple[int, int]:
+        checked = 0
+        sent = 0
+        async for vacancy in self._source.fetch():
+            checked += 1
+            if not await self._store.claim(vacancy):
+                continue
+
+            decision = self._filter.evaluate(vacancy)
+            if not decision.accepted:
+                logger.info(
+                    "Rejected vacancy %s/%s: %s",
+                    vacancy.source,
+                    vacancy.external_id,
+                    ", ".join(decision.reasons),
+                )
+                await self._store.complete(vacancy, notified=False)
+                continue
+
+            await self._notifier.send_vacancy(vacancy, decision)
+            await self._store.complete(vacancy, notified=True)
+            sent += 1
+        return checked, sent
