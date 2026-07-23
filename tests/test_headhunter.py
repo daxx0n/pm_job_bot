@@ -12,6 +12,16 @@ from job_bot.sources.headhunter import HeadHunterSource
 
 class HeadHunterSourceTests(unittest.IsolatedAsyncioTestCase):
     @staticmethod
+    def dictionaries_response() -> dict[str, object]:
+        return {
+            "currency": [
+                {"code": "USD", "rate": 3.25},
+                {"code": "BYR", "rate": 1.0},
+                {"code": "RUR", "rate": 0.035},
+            ]
+        }
+
+    @staticmethod
     def areas_response() -> list[dict[str, object]]:
         return [
             {
@@ -33,6 +43,25 @@ class HeadHunterSourceTests(unittest.IsolatedAsyncioTestCase):
             requests.append(request)
             if request.url.path == "/areas":
                 return httpx.Response(200, json=self.areas_response())
+            if request.url.path == "/dictionaries":
+                return httpx.Response(200, json=self.dictionaries_response())
+            if request.url.path == "/vacancies/123":
+                return httpx.Response(
+                    200,
+                    json={
+                        "id": "123",
+                        "name": "Junior Project Manager",
+                        "alternate_url": "https://rabota.by/vacancy/123",
+                        "employer": {"name": "Example"},
+                        "area": {"id": "1002", "name": "Минск"},
+                        "experience": {"id": "between1And3", "name": "От 1 до 3 лет"},
+                        "work_format": [{"id": "REMOTE", "name": "Удалённо"}],
+                        "description": "Английский язык <strong>B1</strong>",
+                        "key_skills": [{"name": "Jira"}],
+                        "salary": {"from": 1200, "to": 1600, "currency": "USD"},
+                        "published_at": "2026-07-23T10:00:00+03:00",
+                    },
+                )
             return httpx.Response(
                 200,
                 json={
@@ -85,6 +114,20 @@ class HeadHunterSourceTests(unittest.IsolatedAsyncioTestCase):
         def handler(request: httpx.Request) -> httpx.Response:
             if request.url.path == "/areas":
                 return httpx.Response(200, json=self.areas_response())
+            if request.url.path == "/dictionaries":
+                return httpx.Response(200, json=self.dictionaries_response())
+            if request.url.path == "/vacancies/456":
+                return httpx.Response(
+                    200,
+                    json={
+                        "id": "456",
+                        "name": "Project Manager",
+                        "alternate_url": "https://rabota.by/vacancy/456",
+                        "area": {"id": "1002", "name": "Минск"},
+                        "work_format": [{"id": "HYBRID", "name": "Гибрид"}],
+                        "salary": {"from": 3500, "to": 5000, "currency": "BYR"},
+                    },
+                )
             return httpx.Response(
                 200,
                 json={
@@ -110,7 +153,8 @@ class HeadHunterSourceTests(unittest.IsolatedAsyncioTestCase):
 
         vacancy = vacancies[0]
         self.assertEqual(vacancy.employment_format, EmploymentFormat.HYBRID)
-        self.assertIsNone(vacancy.salary_min_usd)
+        self.assertEqual(vacancy.salary_min_usd, 1077)
+        self.assertEqual(vacancy.salary_max_usd, 1538)
         self.assertEqual(vacancy.salary_min, 3500)
         self.assertEqual(vacancy.salary_currency, "BYR")
 
@@ -118,6 +162,20 @@ class HeadHunterSourceTests(unittest.IsolatedAsyncioTestCase):
         def handler(request: httpx.Request) -> httpx.Response:
             if request.url.path == "/areas":
                 return httpx.Response(200, json=self.areas_response())
+            if request.url.path == "/dictionaries":
+                return httpx.Response(200, json=self.dictionaries_response())
+            if request.url.path == "/vacancies/789":
+                return httpx.Response(
+                    200,
+                    json={
+                        "id": "789",
+                        "name": "Project Manager",
+                        "alternate_url": "https://hh.kz/vacancy/789",
+                        "area": {"id": "160", "name": "Алматы"},
+                        "work_format": [{"id": "REMOTE", "name": "Удалённо"}],
+                        "description": "Удалённая работа только для резидентов РФ",
+                    },
+                )
             return httpx.Response(
                 200,
                 json={
@@ -145,6 +203,48 @@ class HeadHunterSourceTests(unittest.IsolatedAsyncioTestCase):
 
         self.assertEqual(vacancies[0].country, "Казахстан")
         self.assertFalse(vacancies[0].remote_from_belarus)
+
+    async def test_uses_full_description_to_detect_required_english(self) -> None:
+        def handler(request: httpx.Request) -> httpx.Response:
+            if request.url.path == "/areas":
+                return httpx.Response(200, json=self.areas_response())
+            if request.url.path == "/dictionaries":
+                return httpx.Response(200, json=self.dictionaries_response())
+            if request.url.path == "/vacancies/999":
+                return httpx.Response(
+                    200,
+                    json={
+                        "id": "999",
+                        "name": "Project Manager",
+                        "alternate_url": "https://rabota.by/vacancy/999",
+                        "area": {"id": "1002", "name": "Минск"},
+                        "work_format": [{"id": "REMOTE", "name": "Удалённо"}],
+                        "description": "<p>Обязательный английский — B2.</p>",
+                    },
+                )
+            return httpx.Response(
+                200,
+                json={
+                    "pages": 1,
+                    "items": [
+                        {
+                            "id": "999",
+                            "name": "Project Manager",
+                            "area": {"id": "1002"},
+                            "work_format": [{"id": "REMOTE"}],
+                            "snippet": {"requirement": "Jira, Scrum"},
+                        }
+                    ],
+                },
+            )
+
+        async with httpx.AsyncClient(transport=httpx.MockTransport(handler)) as client:
+            vacancies = [
+                vacancy
+                async for vacancy in HeadHunterSource(client, user_agent="test/1.0").fetch()
+            ]
+
+        self.assertEqual(vacancies[0].required_english_level, "B2")
 
 
 if __name__ == "__main__":

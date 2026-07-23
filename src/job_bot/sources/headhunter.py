@@ -55,9 +55,10 @@ class HeadHunterSource:
         self._country_by_area: dict[str, str] = {}
         self._target_area_ids: tuple[str, ...] = ()
         self._belarus_area_id: str | None = None
+        self._currency_rates: dict[str, float] = {}
 
     async def fetch(self) -> AsyncIterator[Vacancy]:
-        await self._load_areas()
+        await self._load_reference_data()
         seen: set[str] = set()
         for term in _SEARCH_TERMS:
             async for item in self._search(
@@ -69,7 +70,7 @@ class HeadHunterSource:
                 if external_id in seen:
                     continue
                 seen.add(external_id)
-                yield self._parse(item)
+                yield self._parse(await self._load_vacancy(external_id))
 
             if self._belarus_area_id is not None:
                 async for item in self._search(
@@ -81,7 +82,22 @@ class HeadHunterSource:
                     if external_id in seen:
                         continue
                     seen.add(external_id)
-                    yield self._parse(item)
+                    yield self._parse(await self._load_vacancy(external_id))
+
+    async def _load_reference_data(self) -> None:
+        await self._load_areas()
+        await self._load_currency_rates()
+
+    async def _load_vacancy(self, external_id: str) -> Mapping[str, Any]:
+        response = await self._client.get(
+            f"https://api.hh.ru/vacancies/{external_id}",
+            headers={"User-Agent": self._user_agent, "Accept-Language": "ru"},
+        )
+        response.raise_for_status()
+        payload = response.json()
+        if not isinstance(payload, Mapping):
+            raise RuntimeError(f"HeadHunter returned invalid vacancy {external_id}")
+        return payload
 
     async def _search(
         self,
@@ -141,6 +157,32 @@ class HeadHunterSource:
             raise RuntimeError("HeadHunter areas response does not contain target countries")
         self._target_area_ids = tuple(target_ids)
 
+    async def _load_currency_rates(self) -> None:
+        if self._currency_rates:
+            return
+
+        response = await self._client.get(
+            "https://api.hh.ru/dictionaries",
+            headers={"User-Agent": self._user_agent, "Accept-Language": "ru"},
+        )
+        response.raise_for_status()
+        currencies = _mapping(response.json()).get("currency")
+        if not isinstance(currencies, list):
+            raise RuntimeError("HeadHunter dictionaries response does not contain currencies")
+
+        rates: dict[str, float] = {}
+        for currency in currencies:
+            if not isinstance(currency, Mapping):
+                continue
+            code = str(currency.get("code") or "").upper()
+            rate = currency.get("rate")
+            if code and isinstance(rate, (int, float)) and rate > 0:
+                rates[code] = float(rate)
+
+        if "USD" not in rates:
+            raise RuntimeError("HeadHunter dictionaries response does not contain USD rate")
+        self._currency_rates = rates
+
     def _map_area_tree(self, area: Mapping[str, Any], country_name: str) -> None:
         self._country_by_area[str(area["id"])] = country_name
         children = area.get("areas")
@@ -155,9 +197,9 @@ class HeadHunterSource:
         experience = _mapping(item.get("experience"))
         salary = _mapping(item.get("salary"))
         work_formats = item.get("work_format")
-        description = _snippet_text(item)
+        description = _vacancy_text(item)
         experience_range = _EXPERIENCE_RANGES.get(str(experience.get("id", "")), (None, None))
-        salary_min, salary_max = _salary_in_usd(salary)
+        salary_min, salary_max = _salary_in_usd(salary, self._currency_rates)
 
         published_at: datetime | None = None
         if item.get("published_at"):
@@ -214,16 +256,24 @@ def _employment_format(value: object) -> EmploymentFormat:
     return EmploymentFormat.UNKNOWN
 
 
-def _salary_in_usd(salary: Mapping[str, Any]) -> tuple[int | None, int | None]:
-    """Normalize only USD values; unknown currencies remain unfiltered and visible in raw."""
+def _salary_in_usd(
+    salary: Mapping[str, Any],
+    currency_rates: Mapping[str, float],
+) -> tuple[int | None, int | None]:
+    """Convert salary using HeadHunter dictionary rates expressed in the same base currency."""
 
-    if salary.get("currency") != "USD":
+    currency = str(salary.get("currency") or "").upper()
+    source_rate = currency_rates.get(currency)
+    usd_rate = currency_rates.get("USD")
+    if source_rate is None or usd_rate is None:
         return None, None
     salary_from = salary.get("from")
     salary_to = salary.get("to")
     return (
-        int(salary_from) if salary_from is not None else None,
-        int(salary_to) if salary_to is not None else None,
+        round(float(salary_from) * source_rate / usd_rate)
+        if salary_from is not None
+        else None,
+        round(float(salary_to) * source_rate / usd_rate) if salary_to is not None else None,
     )
 
 
@@ -237,6 +287,18 @@ def _snippet_text(item: Mapping[str, Any]) -> str:
     return plain_text(" ".join(parts))
 
 
+def _vacancy_text(item: Mapping[str, Any]) -> str:
+    parts = [str(item.get("description") or ""), _snippet_text(item)]
+    key_skills = item.get("key_skills")
+    if isinstance(key_skills, list):
+        parts.extend(
+            str(skill.get("name") or "")
+            for skill in key_skills
+            if isinstance(skill, Mapping)
+        )
+    return plain_text(" ".join(parts))
+
+
 def _remote_from_belarus(
     item: Mapping[str, Any],
     country_by_area: Mapping[str, str],
@@ -245,7 +307,7 @@ def _remote_from_belarus(
     if country.casefold() == "беларусь":
         return True
 
-    description = _snippet_text(item).casefold()
+    description = _vacancy_text(item).casefold()
     disallowed_markers = (
         "только для граждан рф",
         "только для резидентов рф",

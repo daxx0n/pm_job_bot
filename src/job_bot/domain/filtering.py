@@ -82,9 +82,14 @@ class EligibilityFilter:
         elif vacancy.salary_min_usd is not None and vacancy.salary_min_usd < 1000:
             warnings.append("нижняя граница зарплаты ниже 1000 USD")
             score -= 10
-        elif vacancy.salary_currency and vacancy.salary_currency != "USD":
+        elif (
+            vacancy.salary_currency
+            and vacancy.salary_currency != "USD"
+            and vacancy.salary_min_usd is None
+            and vacancy.salary_max_usd is None
+        ):
             warnings.append(
-                f"зарплата указана в {vacancy.salary_currency}, нужен пересчёт в USD"
+                f"не удалось пересчитать зарплату из {vacancy.salary_currency} в USD"
             )
             score -= 5
 

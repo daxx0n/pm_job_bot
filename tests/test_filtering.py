@@ -86,7 +86,7 @@ class EligibilityFilterTests(unittest.TestCase):
         )
 
         self.assertTrue(decision.accepted)
-        self.assertIn("зарплата указана в BYR, нужен пересчёт в USD", decision.warnings)
+        self.assertIn("не удалось пересчитать зарплату из BYR в USD", decision.warnings)
 
 
 if __name__ == "__main__":
