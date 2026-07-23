@@ -6,11 +6,13 @@ from aiogram.types import CallbackQuery, InlineKeyboardButton, InlineKeyboardMar
 
 from job_bot.domain import Decision, Vacancy
 from job_bot.settings import Settings
-from job_bot.storage import VacancyFeedbackStore
+from job_bot.storage import VacancyFeedbackStore, feedback_source_token
 from job_bot.telegram.formatting import format_vacancy
 
-_FEEDBACK_PREFIX = "feedback"
+_FEEDBACK_PREFIX = "fb"
 _FEEDBACK_LABELS = {"saved": "Сохранено", "rejected": "Не подходит"}
+_FEEDBACK_CODES = {"saved": "s", "rejected": "r"}
+_FEEDBACK_VALUES = {code: value for value, code in _FEEDBACK_CODES.items()}
 
 
 def _is_allowed_chat(chat_id: int, settings: Settings) -> bool:
@@ -21,7 +23,8 @@ def _is_allowed_chat(chat_id: int, settings: Settings) -> bool:
 
 
 def _feedback_data(value: str, source: str, external_id: str) -> str:
-    data = f"{_FEEDBACK_PREFIX}:{value}:{source}:{external_id}"
+    code = _FEEDBACK_CODES[value]
+    data = f"{_FEEDBACK_PREFIX}:{code}:{feedback_source_token(source)}:{external_id}"
     if len(data.encode()) > 64:
         raise ValueError("Telegram callback data exceeds 64 bytes")
     return data
@@ -29,9 +32,9 @@ def _feedback_data(value: str, source: str, external_id: str) -> str:
 
 def _parse_feedback_data(data: str) -> tuple[str, str, str] | None:
     parts = data.split(":", 3)
-    if len(parts) != 4 or parts[0] != _FEEDBACK_PREFIX or parts[1] not in _FEEDBACK_LABELS:
+    if len(parts) != 4 or parts[0] != _FEEDBACK_PREFIX or parts[1] not in _FEEDBACK_VALUES:
         return None
-    return parts[1], parts[2], parts[3]
+    return _FEEDBACK_VALUES[parts[1]], parts[2], parts[3]
 
 
 def create_dispatcher(
@@ -77,7 +80,7 @@ def create_dispatcher(
             await callback.answer("Этот бот является приватным.", show_alert=True)
             return
 
-        if callback.data == "feedback:done":
+        if callback.data == "fb:done":
             await callback.answer("Действие уже сохранено.")
             return
 
@@ -97,7 +100,7 @@ def create_dispatcher(
         await callback.message.edit_reply_markup(
             reply_markup=InlineKeyboardMarkup(
                 inline_keyboard=[
-                    [InlineKeyboardButton(text=f"✅ {label}", callback_data="feedback:done")]
+                    [InlineKeyboardButton(text=f"✅ {label}", callback_data="fb:done")]
                 ]
             )
         )

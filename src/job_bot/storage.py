@@ -1,6 +1,8 @@
 from __future__ import annotations
 
 from datetime import UTC, datetime
+from hashlib import sha256
+from hmac import compare_digest
 from typing import Protocol
 
 from sqlalchemy import JSON, DateTime, ForeignKey, String, UniqueConstraint, select, update
@@ -21,7 +23,7 @@ class VacancyStore(Protocol):
 
 
 class VacancyFeedbackStore(Protocol):
-    async def record_feedback(self, source: str, external_id: str, value: str) -> bool:
+    async def record_feedback(self, source_token: str, external_id: str, value: str) -> bool:
         """Save feedback and return false when the referenced vacancy does not exist."""
         ...
 
@@ -89,17 +91,24 @@ class SqlAlchemyVacancyStore:
             await session.commit()
             return True
 
-    async def record_feedback(self, source: str, external_id: str, value: str) -> bool:
+    async def record_feedback(self, source_token: str, external_id: str, value: str) -> bool:
         now = datetime.now(UTC)
         async with self._session_factory() as session:
-            vacancy_id = (
+            candidates = (
                 await session.execute(
-                    select(StoredVacancy.id).where(
-                        StoredVacancy.source == source,
+                    select(StoredVacancy.id, StoredVacancy.source).where(
                         StoredVacancy.external_id == external_id,
                     )
                 )
-            ).scalar_one_or_none()
+            ).all()
+            vacancy_id = next(
+                (
+                    candidate.id
+                    for candidate in candidates
+                    if compare_digest(feedback_source_token(candidate.source), source_token)
+                ),
+                None,
+            )
             if vacancy_id is None:
                 return False
 
@@ -134,3 +143,7 @@ class SqlAlchemyVacancyStore:
                 .values(**values)
             )
             await session.commit()
+
+
+def feedback_source_token(source: str) -> str:
+    return sha256(source.encode()).hexdigest()[:8]
