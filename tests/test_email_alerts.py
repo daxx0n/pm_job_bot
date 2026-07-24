@@ -125,7 +125,7 @@ def test_parses_habr_career_alert_from_official_sender() -> None:
     assert vacancies[0].external_id == "career.habr.com:1000123"
 
 
-def test_imap_search_uses_string_charset(monkeypatch: pytest.MonkeyPatch) -> None:
+def test_imap_search_omits_optional_charset(monkeypatch: pytest.MonkeyPatch) -> None:
     class FakeImapClient:
         def __init__(self) -> None:
             self.uid_calls: list[tuple[str, tuple[object, ...]]] = []
@@ -157,4 +157,4 @@ def test_imap_search_uses_string_charset(monkeypatch: pytest.MonkeyPatch) -> Non
 
     assert source._fetch_sync() == []
     assert client.uid_calls[0][0] == "search"
-    assert client.uid_calls[0][1][0] == ""
+    assert client.uid_calls[0][1][0] is None
