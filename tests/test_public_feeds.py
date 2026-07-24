@@ -44,6 +44,7 @@ class PublicFeedSourceTests(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(second, [])
         self.assertEqual(calls, 1)
         self.assertTrue(vacancy.remote_from_belarus)
+        self.assertEqual(vacancy.location, "Worldwide")
         self.assertEqual(vacancy.experience_min_years, 2)
         self.assertEqual(vacancy.required_english_level, "B1")
         self.assertEqual(vacancy.salary_min_usd, 2000)
@@ -80,6 +81,7 @@ class PublicFeedSourceTests(unittest.IsolatedAsyncioTestCase):
 
         vacancy = vacancies[0]
         self.assertEqual(vacancy.company, "Example Inc")
+        self.assertEqual(vacancy.location, "Worldwide")
         self.assertEqual(vacancy.external_id, "abc")
         self.assertTrue(vacancy.remote_from_belarus)
         self.assertEqual(vacancy.experience_min_years, 2)
