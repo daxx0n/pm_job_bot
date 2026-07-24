@@ -4,10 +4,15 @@ from job_bot.domain.models import EmploymentFormat
 from job_bot.sources.email_alerts import parse_alert_message
 
 
-def _message(html: str, *, subject: str = "Новые вакансии: удалённая работа") -> bytes:
+def _message(
+    html: str,
+    *,
+    subject: str = "Новые вакансии: удалённая работа",
+    sender: str = "Rabota.by <jobs@news.rabota.by>",
+) -> bytes:
     message = EmailMessage()
     message["Subject"] = subject
-    message["From"] = "Rabota.by <jobs@news.rabota.by>"
+    message["From"] = sender
     message["Date"] = "Fri, 24 Jul 2026 10:00:00 +0200"
     message["Message-ID"] = "<alert-1@example.test>"
     message.set_content("Откройте HTML-версию письма")
@@ -80,3 +85,39 @@ def test_ignores_vacancy_link_from_unrelated_sender() -> None:
     message.set_content("https://rabota.by/vacancy/123456")
 
     assert parse_alert_message(message.as_bytes()) == []
+
+
+def test_parses_getmatch_alert_from_official_sender() -> None:
+    vacancies = parse_alert_message(
+        _message(
+            """
+            <a href="https://getmatch.ru/vacancies/21364-project-manager?utm_source=email">
+              Junior Project Manager
+            </a>
+            """,
+            sender="getmatch <jobs@news.getmatch.ru>",
+        )
+    )
+
+    assert len(vacancies) == 1
+    vacancy = vacancies[0]
+    assert vacancy.source == "Email/getmatch.ru"
+    assert vacancy.external_id == "getmatch.ru:21364-project-manager"
+    assert vacancy.url == "https://getmatch.ru/vacancies/21364-project-manager"
+
+
+def test_parses_habr_career_alert_from_official_sender() -> None:
+    vacancies = parse_alert_message(
+        _message(
+            """
+            <a href="https://career.habr.com/vacancies/1000123?from=email">
+              Project Coordinator
+            </a>
+            """,
+            sender="Хабр Карьера <career@habr.com>",
+        )
+    )
+
+    assert len(vacancies) == 1
+    assert vacancies[0].source == "Email/career.habr.com"
+    assert vacancies[0].external_id == "career.habr.com:1000123"
