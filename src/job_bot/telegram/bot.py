@@ -6,7 +6,11 @@ from aiogram.types import CallbackQuery, InlineKeyboardButton, InlineKeyboardMar
 
 from job_bot.domain import Decision, Vacancy
 from job_bot.settings import Settings
-from job_bot.storage import VacancyFeedbackStore, feedback_source_token
+from job_bot.storage import (
+    VacancyFeedbackStore,
+    feedback_external_id_token,
+    feedback_source_token,
+)
 from job_bot.telegram.formatting import format_vacancy
 
 _FEEDBACK_PREFIX = "fb"
@@ -24,7 +28,10 @@ def _is_allowed_chat(chat_id: int, settings: Settings) -> bool:
 
 def _feedback_data(value: str, source: str, external_id: str) -> str:
     code = _FEEDBACK_CODES[value]
-    data = f"{_FEEDBACK_PREFIX}:{code}:{feedback_source_token(source)}:{external_id}"
+    data = (
+        f"{_FEEDBACK_PREFIX}:{code}:{feedback_source_token(source)}:"
+        f"{feedback_external_id_token(external_id)}"
+    )
     if len(data.encode()) > 64:
         raise ValueError("Telegram callback data exceeds 64 bytes")
     return data
