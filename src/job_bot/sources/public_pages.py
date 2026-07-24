@@ -7,6 +7,7 @@ from datetime import datetime
 from hashlib import sha256
 from html.parser import HTMLParser
 from urllib.parse import urljoin, urlparse
+from zoneinfo import ZoneInfo
 
 import httpx
 
@@ -71,6 +72,16 @@ _BELARUS_DISALLOWED_MARKERS = (
     "только россия",
     "только по рф",
 )
+_FIELD_PATTERNS = {
+    "company": re.compile(
+        r"^\s*(?:компания|company|работодатель|employer)\s*[:—–-]\s*(.+?)\s*$",
+        re.IGNORECASE,
+    ),
+    "location": re.compile(
+        r"^\s*(?:локация|location|город|география)\s*[:—–-]\s*(.+?)\s*$",
+        re.IGNORECASE,
+    ),
+}
 
 
 class _RefreshLimitedSource:
@@ -163,11 +174,13 @@ class _HabrCareerParser(HTMLParser):
         elif "vacancy-card__company-title" in classes:
             self._capture = "company"
             self._parts = []
-        elif (
-            "vacancy-card__meta" in classes
-            or "vacancy-card__skills" in classes
-            or "vacancy-card__salary" in classes
-        ):
+        elif "vacancy-card__date" in classes:
+            self._capture = "published_at"
+            self._parts = []
+        elif "vacancy-card__meta" in classes:
+            self._capture = "meta"
+            self._parts = []
+        elif "vacancy-card__skills" in classes or "vacancy-card__salary" in classes:
             self._capture = "context"
             self._parts = []
 
@@ -267,7 +280,8 @@ class _TelegramPreviewParser(HTMLParser):
 
 
 def _habr_vacancy(item: dict[str, str]) -> Vacancy:
-    context = plain_text(item.get("context", ""))
+    meta = plain_text(item.get("meta", ""))
+    context = plain_text(" ".join((meta, item.get("context", ""))))
     url = item["url"]
     return Vacancy(
         source=HabrCareerSource.name,
@@ -277,10 +291,13 @@ def _habr_vacancy(item: dict[str, str]) -> Vacancy:
         description=context,
         company=item.get("company"),
         country=_country(context),
+        location=_habr_location(meta) or _country(context),
         employment_format=EmploymentFormat.REMOTE,
         remote_from_belarus=_remote_from_belarus(context),
         experience_min_years=infer_experience_min_years(context),
         required_english_level=infer_required_english_level(context),
+        published_at=_habr_datetime(item.get("published_at")),
+        publication_time_known=False,
         raw=dict(item),
     )
 
@@ -306,7 +323,9 @@ def _telegram_vacancy(source: str, post: dict[str, object]) -> Vacancy:
         title=_vacancy_title(text),
         url=external_link,
         description=text,
+        company=_field_value(text, "company"),
         country=_country(text),
+        location=_field_value(text, "location") or _country(text),
         employment_format=_employment_format(text),
         remote_from_belarus=_remote_from_belarus(text),
         experience_min_years=infer_experience_min_years(text),
@@ -371,3 +390,55 @@ def _optional_datetime(value: object) -> datetime | None:
     if not value:
         return None
     return datetime.fromisoformat(str(value).replace("Z", "+00:00"))
+
+
+def _field_value(text: str, field: str) -> str | None:
+    pattern = _FIELD_PATTERNS[field]
+    for line in text.splitlines():
+        match = pattern.match(line)
+        if match:
+            return match.group(1).strip(" .")
+    return None
+
+
+def _habr_datetime(value: str | None) -> datetime | None:
+    if not value:
+        return None
+    normalized = value.casefold().strip()
+    months = {
+        "января": 1,
+        "февраля": 2,
+        "марта": 3,
+        "апреля": 4,
+        "мая": 5,
+        "июня": 6,
+        "июля": 7,
+        "августа": 8,
+        "сентября": 9,
+        "октября": 10,
+        "ноября": 11,
+        "декабря": 12,
+    }
+    match = re.fullmatch(r"(\d{1,2})\s+([а-яё]+)(?:\s+(\d{4}))?", normalized)
+    if not match or match.group(2) not in months:
+        return _optional_datetime(value)
+    now = datetime.now(ZoneInfo("Europe/Minsk"))
+    year = int(match.group(3)) if match.group(3) else now.year
+    return datetime(year, months[match.group(2)], int(match.group(1)), tzinfo=now.tzinfo)
+
+
+def _habr_location(meta: str) -> str | None:
+    value = re.sub(
+        r"\b(?:intern|junior|middle\+?|senior|lead)\b",
+        " ",
+        meta,
+        flags=re.IGNORECASE,
+    )
+    value = re.sub(
+        r"(?:можно\s+удал[её]нно|удал[её]нно|remote|гибрид|hybrid|офис|office)",
+        " ",
+        value,
+        flags=re.IGNORECASE,
+    )
+    value = " ".join(value.strip(" ,;—–-").split())
+    return value or None
