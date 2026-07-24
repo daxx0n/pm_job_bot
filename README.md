@@ -55,24 +55,28 @@ Telegram-сессии:
 
 - Remotive — категория Project Management;
 - We Work Remotely — категория Management & Finance;
-- Himalayas — последние remote-вакансии.
+- Himalayas — последние remote-вакансии;
+- Jobicy — категория Project Management (опрос раз в 6 часов);
 - Хабр Карьера — публичный каталог удалённых вакансий Project Manager;
 - публичные web-preview Telegram-каналов:
-  `@product_project_job`, `@pmclub`, `@geekjobs`.
+  `@product_project_job`, `@pmclub`, `@geekjobs`, `@budujobs`, `@remotejobss`.
 
 Они не требуют логина, API-ключей или cookies. Все ссылки в Telegram ведут на
 страницу исходного источника. Remotive проверяется раз в 6 часов в соответствии с
-рекомендованным лимитом, RSS-источники — раз в 30 минут:
+рекомендованным лимитом, обычные RSS-источники — раз в 30 минут, Jobicy — раз в 6 часов:
 
 ```dotenv
 REMOTIVE_ENABLED=true
 REMOTIVE_REFRESH_SECONDS=21600
 WE_WORK_REMOTELY_ENABLED=true
 HIMALAYAS_ENABLED=true
+JOBICY_ENABLED=true
+JOBICY_REFRESH_SECONDS=21600
 RSS_REFRESH_SECONDS=1800
 HABR_CAREER_ENABLED=true
 TELEGRAM_PUBLIC_ENABLED=true
 TELEGRAM_PUBLIC_CHANNELS=product_project_job,pmclub,geekjobs
+TELEGRAM_PUBLIC_ADDITIONAL_CHANNELS=budujobs,remotejobss
 PUBLIC_PAGES_REFRESH_SECONDS=1800
 ```
 

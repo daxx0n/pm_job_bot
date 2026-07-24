@@ -58,6 +58,7 @@ async def main() -> None:
             or settings.remotive_enabled
             or settings.we_work_remotely_enabled
             or settings.himalayas_enabled
+            or settings.jobicy_enabled
             or settings.habr_career_enabled
             or (
                 settings.telegram_public_enabled
@@ -98,6 +99,18 @@ async def main() -> None:
                         name="Himalayas",
                         url="https://himalayas.app/jobs/rss",
                         refresh_seconds=settings.rss_refresh_seconds,
+                    )
+                )
+            if settings.jobicy_enabled:
+                sources.append(
+                    PublicRssSource(
+                        client,
+                        name="Jobicy",
+                        url=(
+                            "https://jobicy.com/jobs/feed"
+                            "?industry=project-management"
+                        ),
+                        refresh_seconds=settings.jobicy_refresh_seconds,
                     )
                 )
             if settings.habr_career_enabled:
