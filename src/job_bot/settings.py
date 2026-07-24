@@ -22,6 +22,12 @@ class Settings(BaseSettings):
     we_work_remotely_enabled: bool = True
     himalayas_enabled: bool = True
     rss_refresh_seconds: int = 1_800
+    habr_career_enabled: bool = True
+    telegram_public_enabled: bool = True
+    telegram_public_channels: str = (
+        "projects_jobs_feed,product_project_job,pmclub,geekjobs"
+    )
+    public_pages_refresh_seconds: int = 1_800
     email_alerts_enabled: bool = False
     email_imap_host: str = "imap.gmail.com"
     email_imap_port: int = 993
@@ -50,6 +56,9 @@ class Settings(BaseSettings):
 
     def lever_site_names(self) -> tuple[str, ...]:
         return _csv_values(self.lever_sites)
+
+    def telegram_public_channel_names(self) -> tuple[str, ...]:
+        return _csv_values(self.telegram_public_channels)
 
     @model_validator(mode="after")
     def validate_email_alert_settings(self) -> Settings:

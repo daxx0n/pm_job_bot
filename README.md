@@ -50,12 +50,15 @@ PostgreSQL и в дальнейшем может использоваться д
 
 ### Публичные источники без регистрации
 
-По умолчанию подключены три источника, которые официально предоставляют публичные
-фиды вакансий:
+По умолчанию подключены источники, доступные без логина, cookies и пользовательской
+Telegram-сессии:
 
 - Remotive — категория Project Management;
 - We Work Remotely — категория Management & Finance;
 - Himalayas — последние remote-вакансии.
+- Хабр Карьера — публичный каталог удалённых вакансий Project Manager;
+- публичные web-preview Telegram-каналов:
+  `@projects_jobs_feed`, `@product_project_job`, `@pmclub`, `@geekjobs`.
 
 Они не требуют логина, API-ключей или cookies. Все ссылки в Telegram ведут на
 страницу исходного источника. Remotive проверяется раз в 6 часов в соответствии с
@@ -67,20 +70,31 @@ REMOTIVE_REFRESH_SECONDS=21600
 WE_WORK_REMOTELY_ENABLED=true
 HIMALAYAS_ENABLED=true
 RSS_REFRESH_SECONDS=1800
+HABR_CAREER_ENABLED=true
+TELEGRAM_PUBLIC_ENABLED=true
+TELEGRAM_PUBLIC_CHANNELS=projects_jobs_feed,product_project_job,pmclub,geekjobs
+PUBLIC_PAGES_REFRESH_SECONDS=1800
 ```
 
 `HH_ENABLED=false` и `EMAIL_ALERTS_ENABLED=false` полностью исключают
 HeadHunter/Rabota.by и их email-уведомления, не отключая публичные источники.
 
-### Email-уведомления Rabota.by через Gmail
+Каждый источник изолирован: временная ошибка Хабр Карьеры или одного Telegram-канала
+не останавливает остальные. `@agile_jobs` является группой, а не публичным каналом
+с доступной лентой, поэтому он не подключён: для чтения потребовалась бы отдельная
+пользовательская Telegram-сессия.
+
+### Email-уведомления Rabota.by и других площадок через Gmail
 
 Источник читает только официальные письма с вакансиями и извлекает из них ссылки
-`rabota.by`/HeadHunter. Сайт не парсится, пароль от Rabota.by не используется, а
-повторные вакансии отсекаются PostgreSQL.
+Rabota.by/HeadHunter, Хабр Карьеры, GeekJob, jobs.dev.by и getmatch. Сайты при этом
+не требуют передачи пароля боту, а повторные вакансии отсекаются PostgreSQL.
 
 1. Создайте на Rabota.by сохранённые поиски для remote-вакансий и отдельный поиск
    hybrid-вакансий только по Беларуси.
 2. Включите email-уведомления для этих поисков.
+   Для jobs.dev.by заполните анкету Project Manager и включите письма; для getmatch
+   включите уведомления о подходящих вакансиях в личном кабинете.
 3. В аккаунте Google включите двухэтапную аутентификацию.
 4. Создайте отдельный пароль приложения Google для бота.
 5. Добавьте в `.env`:

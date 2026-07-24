@@ -16,6 +16,7 @@ from job_bot.sources.career_pages import CompositeSource, GreenhouseSource, Leve
 from job_bot.sources.email_alerts import EmailAlertSource
 from job_bot.sources.headhunter import HeadHunterSource
 from job_bot.sources.public_feeds import PublicRssSource, RemotiveSource
+from job_bot.sources.public_pages import HabrCareerSource, TelegramPublicChannelSource
 from job_bot.storage import Base, SqlAlchemyVacancyStore
 from job_bot.telegram.bot import TelegramNotifier, create_dispatcher
 
@@ -57,6 +58,11 @@ async def main() -> None:
             or settings.remotive_enabled
             or settings.we_work_remotely_enabled
             or settings.himalayas_enabled
+            or settings.habr_career_enabled
+            or (
+                settings.telegram_public_enabled
+                and settings.telegram_public_channel_names()
+            )
         )
         if has_http_sources:
             client = httpx.AsyncClient(timeout=settings.hh_request_timeout_seconds)
@@ -93,6 +99,22 @@ async def main() -> None:
                         url="https://himalayas.app/jobs/rss",
                         refresh_seconds=settings.rss_refresh_seconds,
                     )
+                )
+            if settings.habr_career_enabled:
+                sources.append(
+                    HabrCareerSource(
+                        client,
+                        refresh_seconds=settings.public_pages_refresh_seconds,
+                    )
+                )
+            if settings.telegram_public_enabled:
+                sources.extend(
+                    TelegramPublicChannelSource(
+                        client,
+                        channel,
+                        refresh_seconds=settings.public_pages_refresh_seconds,
+                    )
+                    for channel in settings.telegram_public_channel_names()
                 )
         if settings.email_alerts_enabled:
             assert settings.email_imap_app_password is not None
