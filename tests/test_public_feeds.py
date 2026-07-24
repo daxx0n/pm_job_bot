@@ -118,6 +118,53 @@ class PublicFeedSourceTests(unittest.IsolatedAsyncioTestCase):
         self.assertTrue(vacancy.remote_from_belarus)
         self.assertEqual(vacancy.experience_min_years, 1)
 
+    async def test_rss_deduplicates_repeated_long_guid(self) -> None:
+        link = f"https://himalayas.example/jobs/{'long-slug-' * 20}"
+        rss = f"""<rss><channel><item>
+          <title>Junior Project Manager</title>
+          <link>{link}</link>
+          <guid>{link}</guid>
+          <guid>{link}</guid>
+          <description>1 year of experience. English B1.</description>
+        </item></channel></rss>"""
+
+        def handler(request: httpx.Request) -> httpx.Response:
+            return httpx.Response(200, text=rss)
+
+        async with httpx.AsyncClient(transport=httpx.MockTransport(handler)) as client:
+            source = PublicRssSource(
+                client,
+                name="Himalayas",
+                url="https://himalayas.example/rss",
+            )
+            vacancies = [vacancy async for vacancy in source.fetch()]
+
+        self.assertEqual(vacancies[0].external_id, link)
+        self.assertLessEqual(len(vacancies[0].external_id), 255)
+
+    async def test_rss_hashes_external_id_longer_than_database_limit(self) -> None:
+        guid = "custom-id-" * 40
+        rss = f"""<rss><channel><item>
+          <title>Junior Project Manager</title>
+          <link>https://himalayas.example/jobs/1</link>
+          <guid>{guid}</guid>
+          <description>1 year of experience. English B1.</description>
+        </item></channel></rss>"""
+
+        def handler(request: httpx.Request) -> httpx.Response:
+            return httpx.Response(200, text=rss)
+
+        async with httpx.AsyncClient(transport=httpx.MockTransport(handler)) as client:
+            source = PublicRssSource(
+                client,
+                name="Himalayas",
+                url="https://himalayas.example/rss",
+            )
+            vacancies = [vacancy async for vacancy in source.fetch()]
+
+        self.assertRegex(vacancies[0].external_id, r"^sha256:[0-9a-f]{64}$")
+        self.assertLessEqual(len(vacancies[0].external_id), 255)
+
     async def test_rss_marks_specific_country_as_unavailable_from_belarus(self) -> None:
         rss = """<rss><channel><item>
           <title>Example: Project Manager</title>
