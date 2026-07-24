@@ -31,8 +31,19 @@ def test_default_public_channels_include_additional_sources() -> None:
         "pmclub",
         "geekjobs",
         "budujobs",
-        "remotejobss",
+        "it_vakansii_jobs",
+        "forproducts",
+        "jobforjunior",
+        "young_june",
+        "igaming_work",
+        "betting_job",
     )
+
+
+def test_international_sources_are_opt_in() -> None:
+    settings = Settings(telegram_bot_token=SecretStr("test-token"))
+
+    assert settings.international_sources_enabled is False
 
 
 def test_public_channels_are_deduplicated() -> None:

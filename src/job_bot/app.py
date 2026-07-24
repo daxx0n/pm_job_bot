@@ -55,10 +55,15 @@ async def main() -> None:
             settings.hh_enabled
             or settings.greenhouse_board_tokens()
             or settings.lever_site_names()
-            or settings.remotive_enabled
-            or settings.we_work_remotely_enabled
-            or settings.himalayas_enabled
-            or settings.jobicy_enabled
+            or (
+                settings.international_sources_enabled
+                and (
+                    settings.remotive_enabled
+                    or settings.we_work_remotely_enabled
+                    or settings.himalayas_enabled
+                    or settings.jobicy_enabled
+                )
+            )
             or settings.habr_career_enabled
             or (
                 settings.telegram_public_enabled
@@ -73,14 +78,17 @@ async def main() -> None:
                 GreenhouseSource(client, token) for token in settings.greenhouse_board_tokens()
             )
             sources.extend(LeverSource(client, site) for site in settings.lever_site_names())
-            if settings.remotive_enabled:
+            if settings.international_sources_enabled and settings.remotive_enabled:
                 sources.append(
                     RemotiveSource(
                         client,
                         refresh_seconds=settings.remotive_refresh_seconds,
                     )
                 )
-            if settings.we_work_remotely_enabled:
+            if (
+                settings.international_sources_enabled
+                and settings.we_work_remotely_enabled
+            ):
                 sources.append(
                     PublicRssSource(
                         client,
@@ -92,7 +100,7 @@ async def main() -> None:
                         refresh_seconds=settings.rss_refresh_seconds,
                     )
                 )
-            if settings.himalayas_enabled:
+            if settings.international_sources_enabled and settings.himalayas_enabled:
                 sources.append(
                     PublicRssSource(
                         client,
@@ -101,7 +109,7 @@ async def main() -> None:
                         refresh_seconds=settings.rss_refresh_seconds,
                     )
                 )
-            if settings.jobicy_enabled:
+            if settings.international_sources_enabled and settings.jobicy_enabled:
                 sources.append(
                     PublicRssSource(
                         client,

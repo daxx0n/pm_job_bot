@@ -50,22 +50,22 @@ PostgreSQL и в дальнейшем может использоваться д
 
 ### Публичные источники без регистрации
 
-По умолчанию подключены источники, доступные без логина, cookies и пользовательской
-Telegram-сессии:
+По умолчанию бот ориентирован на русскоязычные источники, доступные без логина,
+cookies и пользовательской Telegram-сессии:
 
-- Remotive — категория Project Management;
-- We Work Remotely — категория Management & Finance;
-- Himalayas — последние remote-вакансии;
-- Jobicy — категория Project Management (опрос раз в 6 часов);
 - Хабр Карьера — публичный каталог удалённых вакансий Project Manager;
-- публичные web-preview Telegram-каналов:
-  `@product_project_job`, `@pmclub`, `@geekjobs`, `@budujobs`, `@remotejobss`.
+- Project/Product и общие IT-каналы: `@product_project_job`, `@pmclub`,
+  `@geekjobs`, `@budujobs`, `@it_vakansii_jobs`, `@forproducts`,
+  `@jobforjunior`, `@young_june`;
+- iGaming/Gambling: `@igaming_work` и `@betting_job`.
 
-Они не требуют логина, API-ключей или cookies. Все ссылки в Telegram ведут на
-страницу исходного источника. Remotive проверяется раз в 6 часов в соответствии с
-рекомендованным лимитом, обычные RSS-источники — раз в 30 минут, Jobicy — раз в 6 часов:
+Международные англоязычные источники Remotive, We Work Remotely, Himalayas и
+Jobicy сохранены как необязательные, но единым блоком отключены по умолчанию.
+Все источники не требуют логина, API-ключей или cookies, а ссылки в Telegram ведут
+на исходную публикацию. Настройки:
 
 ```dotenv
+INTERNATIONAL_SOURCES_ENABLED=false
 REMOTIVE_ENABLED=true
 REMOTIVE_REFRESH_SECONDS=21600
 WE_WORK_REMOTELY_ENABLED=true
@@ -76,9 +76,13 @@ RSS_REFRESH_SECONDS=1800
 HABR_CAREER_ENABLED=true
 TELEGRAM_PUBLIC_ENABLED=true
 TELEGRAM_PUBLIC_CHANNELS=product_project_job,pmclub,geekjobs
-TELEGRAM_PUBLIC_ADDITIONAL_CHANNELS=budujobs,remotejobss
+TELEGRAM_PUBLIC_ADDITIONAL_CHANNELS=budujobs,it_vakansii_jobs,forproducts,jobforjunior,young_june,igaming_work,betting_job
 PUBLIC_PAGES_REFRESH_SECONDS=1800
 ```
+
+Чтобы временно вернуть международные англоязычные ленты, установите
+`INTERNATIONAL_SOURCES_ENABLED=true`. Их индивидуальные флаги и интервалы
+остаются доступными; Remotive и Jobicy опрашиваются не чаще одного раза в 6 часов.
 
 `HH_ENABLED=false` и `EMAIL_ALERTS_ENABLED=false` полностью исключают
 HeadHunter/Rabota.by и их email-уведомления, не отключая публичные источники.
