@@ -45,7 +45,6 @@ async def main() -> None:
     async with engine.begin() as connection:
         await connection.run_sync(Base.metadata.create_all)
     store = SqlAlchemyVacancyStore(async_sessionmaker(engine, expire_on_commit=False))
-    dispatcher = create_dispatcher(settings, store)
 
     poll_task: asyncio.Task[None] | None = None
     client: httpx.AsyncClient | None = None
@@ -151,11 +150,23 @@ async def main() -> None:
                 )
             )
 
+    source_names = tuple(dict.fromkeys(source.name for source in sources))
+    dispatcher = create_dispatcher(
+        settings,
+        feedback_store=store,
+        preference_store=store,
+        source_names=source_names,
+    )
+
     if sources and settings.telegram_recipient_chat_id is not None:
         pipeline = VacancyPipeline(
             source=CompositeSource(sources),
             store=store,
-            notifier=TelegramNotifier(bot, settings.telegram_recipient_chat_id),
+            notifier=TelegramNotifier(
+                bot,
+                settings.telegram_recipient_chat_id,
+                store,
+            ),
             eligibility_filter=EligibilityFilter(),
         )
         poll_task = asyncio.create_task(

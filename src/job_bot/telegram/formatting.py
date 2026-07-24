@@ -1,10 +1,11 @@
 from __future__ import annotations
 
-from datetime import UTC
+from datetime import UTC, datetime
 from html import escape
 from zoneinfo import ZoneInfo
 
 from job_bot.domain import Decision, EmploymentFormat, Vacancy
+from job_bot.storage import MatchedVacancy
 
 _FORMAT_LABELS = {
     EmploymentFormat.REMOTE: "Удалённо",
@@ -75,6 +76,18 @@ def _published_at(vacancy: Vacancy) -> str:
     return f"{local_value:%d.%m.%Y %H:%M} (Минск)"
 
 
+def _short_date(value: datetime | None) -> str:
+    if value is None:
+        return "дата не указана"
+    if value.tzinfo is None:
+        value = value.replace(tzinfo=UTC)
+    return value.astimezone(_DISPLAY_TIMEZONE).strftime("%d.%m.%Y")
+
+
+def _clip(value: str, limit: int) -> str:
+    return value if len(value) <= limit else f"{value[: limit - 1]}…"
+
+
 def format_vacancy(vacancy: Vacancy, decision: Decision) -> str:
     """Render a compact, HTML-safe vacancy card for Telegram."""
 
@@ -102,4 +115,25 @@ def format_vacancy(vacancy: Vacancy, decision: Decision) -> str:
         warnings = "; ".join(escape(item) for item in decision.warnings)
         lines.extend(("", f"⚠️ <b>Проверить:</b> {warnings}"))
 
+    return "\n".join(lines)
+
+
+def format_latest_matches(source: str, vacancies: tuple[MatchedVacancy, ...]) -> str:
+    """Render up to ten recent accepted vacancies from one source."""
+
+    lines = [f"<b>Последние подходящие — {escape(source)}</b>", ""]
+    if not vacancies:
+        lines.append("Подходящих вакансий из этого источника пока нет.")
+        return "\n".join(lines)
+
+    for index, vacancy in enumerate(vacancies, start=1):
+        company = escape(_clip(vacancy.company or "Компания не указана", 80))
+        location = escape(_clip(vacancy.location or "локация не указана", 80))
+        title = escape(_clip(vacancy.title, 140))
+        url = escape(vacancy.url, quote=True)
+        score = f" · {vacancy.score}%" if vacancy.score is not None else ""
+        lines.append(
+            f'{index}. <a href="{url}">{title}</a>\n'
+            f"   {company} · {location} · {_short_date(vacancy.published_at)}{score}"
+        )
     return "\n".join(lines)

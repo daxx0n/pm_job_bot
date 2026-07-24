@@ -6,7 +6,8 @@ from pathlib import Path
 sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "src"))
 
 from job_bot.domain import Decision, EmploymentFormat, Vacancy
-from job_bot.telegram.formatting import format_vacancy
+from job_bot.storage import MatchedVacancy
+from job_bot.telegram.formatting import format_latest_matches, format_vacancy
 
 
 class TelegramFormattingTests(unittest.TestCase):
@@ -88,6 +89,35 @@ class TelegramFormattingTests(unittest.TestCase):
         self.assertIn("<b>Локация:</b> Не указана", message)
         self.assertIn("<b>Опыт:</b> Не указан", message)
         self.assertIn("<b>Опубликовано:</b> Не указаны", message)
+
+    def test_formats_latest_matches_for_one_source(self) -> None:
+        vacancies = (
+            MatchedVacancy(
+                source="Telegram/@igaming_work",
+                external_id="1",
+                title="Junior Project Manager",
+                url="https://example.test/jobs/1?a=1&b=2",
+                company="Example & Partners",
+                location="Remote",
+                published_at=datetime.fromisoformat("2026-07-24T10:00:00+00:00"),
+                score=95,
+            ),
+        )
+
+        message = format_latest_matches("Telegram/@igaming_work", vacancies)
+
+        self.assertIn("Последние подходящие — Telegram/@igaming_work", message)
+        self.assertIn(
+            '<a href="https://example.test/jobs/1?a=1&amp;b=2">'
+            "Junior Project Manager</a>",
+            message,
+        )
+        self.assertIn("Example &amp; Partners · Remote · 24.07.2026 · 95%", message)
+
+    def test_formats_empty_latest_matches(self) -> None:
+        message = format_latest_matches("HeadHunter", ())
+
+        self.assertIn("Подходящих вакансий из этого источника пока нет.", message)
 
 
 if __name__ == "__main__":
