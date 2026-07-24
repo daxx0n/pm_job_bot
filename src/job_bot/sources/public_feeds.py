@@ -101,6 +101,7 @@ class RemotiveSource(_RefreshLimitedSource):
             description=description,
             company=str(job.get("company_name") or "") or None,
             country=_country(location),
+            location=location or None,
             employment_format=EmploymentFormat.REMOTE,
             remote_from_belarus=_remote_from_belarus(location),
             experience_min_years=infer_experience_min_years(description),
@@ -157,7 +158,7 @@ class PublicRssSource(_RefreshLimitedSource):
             for key, value in fields.items()
             if key in {"region", "locationrestriction", "location"}
         ]
-        location = " ".join(locations)
+        location = ", ".join(locations)
         link = fields.get("link", "")
         external_id = _rss_external_id(fields.get("guid"), link)
         return Vacancy(
@@ -168,6 +169,7 @@ class PublicRssSource(_RefreshLimitedSource):
             description=description,
             company=company,
             country=_country(location),
+            location=location or None,
             employment_format=EmploymentFormat.REMOTE,
             remote_from_belarus=_remote_from_belarus(location),
             experience_min_years=infer_experience_min_years(description),
