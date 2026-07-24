@@ -50,6 +50,7 @@ class CareerPageSourceTests(unittest.IsolatedAsyncioTestCase):
                         "id": "abc",
                         "text": "Project Manager",
                         "hostedUrl": "https://jobs.lever.co/example/abc",
+                        "createdAt": 1784800800000,
                         "categories": {"location": "Remote"},
                         "descriptionPlain": "Remote only from Russia. English B1.",
                     }
@@ -62,6 +63,11 @@ class CareerPageSourceTests(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(vacancies[0].source, "Lever/example")
         self.assertEqual(vacancies[0].country, "Россия")
         self.assertFalse(vacancies[0].remote_from_belarus)
+        self.assertIsNotNone(vacancies[0].published_at)
+        self.assertEqual(
+            vacancies[0].published_at.isoformat(),
+            "2026-07-23T10:00:00+00:00",
+        )
 
 
 if __name__ == "__main__":

@@ -2,7 +2,7 @@ from __future__ import annotations
 
 import logging
 from collections.abc import AsyncIterator, Mapping
-from datetime import datetime
+from datetime import UTC, datetime
 from typing import Any
 
 import httpx
@@ -151,6 +151,7 @@ class LeverSource:
             remote_from_belarus=_remote_from_belarus(context),
             experience_min_years=infer_experience_min_years(description),
             required_english_level=infer_required_english_level(description),
+            published_at=_optional_datetime(job.get("createdAt")),
             raw=dict(job),
         )
 
@@ -188,4 +189,7 @@ def _remote_from_belarus(text: str) -> bool | None:
 def _optional_datetime(value: object) -> datetime | None:
     if value is None:
         return None
+    if isinstance(value, (int, float)):
+        seconds = value / 1000 if value >= 100_000_000_000 else value
+        return datetime.fromtimestamp(seconds, UTC)
     return datetime.fromisoformat(str(value).replace("Z", "+00:00"))

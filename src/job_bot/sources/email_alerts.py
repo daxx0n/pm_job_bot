@@ -237,7 +237,11 @@ def parse_alert_message(raw_message: bytes) -> list[Vacancy]:
                 employment_format=_employment_format(context),
                 remote_from_belarus=True if country == "Беларусь" else None,
                 published_at=published_at,
-                raw={"email_subject": subject, "message_id": message_id},
+                raw={
+                    "email_subject": subject,
+                    "message_id": message_id,
+                    "published_at": published_at.isoformat() if published_at else None,
+                },
             )
         )
     return vacancies
