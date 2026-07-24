@@ -14,6 +14,7 @@ async def test_habr_career_parses_public_vacancy_cards() -> None:
           Junior Project Manager
         </a>
         <div class="vacancy-card__company-title">Example</div>
+        <div class="vacancy-card__date">24 июля</div>
         <div class="vacancy-card__meta">Intern Можно удалённо Минск</div>
         <div class="vacancy-card__skills">Agile Scrum English B1</div>
       </div>
@@ -35,6 +36,8 @@ async def test_habr_career_parses_public_vacancy_cards() -> None:
     assert vacancy.external_id == "1000123"
     assert vacancy.title == "Junior Project Manager"
     assert vacancy.company == "Example"
+    assert vacancy.location == "Минск"
+    assert vacancy.published_at is not None
     assert vacancy.url == "https://career.habr.com/vacancies/1000123"
     assert vacancy.employment_format is EmploymentFormat.REMOTE
     assert vacancy.required_english_level == "B1"
@@ -48,6 +51,8 @@ async def test_telegram_preview_parses_public_project_vacancy() -> None:
       <div class="tgme_widget_message_text js-message_text">
         #вакансия<br>
         Junior Project Manager<br>
+        Компания: Example<br>
+        Локация: Минск, Беларусь<br>
         Удалённо, можно работать из Беларуси.<br>
         Опыт от 2 лет. English B1.<br>
         <a href="https://example.com/jobs/pm">Описание вакансии</a>
@@ -72,6 +77,8 @@ async def test_telegram_preview_parses_public_project_vacancy() -> None:
     assert vacancy.source == "Telegram/@projects_jobs_feed"
     assert vacancy.external_id == "projects_jobs_feed/12345"
     assert vacancy.title == "Junior Project Manager"
+    assert vacancy.company == "Example"
+    assert vacancy.location == "Минск, Беларусь"
     assert vacancy.url == "https://example.com/jobs/pm"
     assert vacancy.country == "Беларусь"
     assert vacancy.employment_format is EmploymentFormat.REMOTE
