@@ -126,8 +126,8 @@ class EmailAlertSource:
                 "%d-%b-%Y"
             )
             # imaplib uses None to omit the optional CHARSET; typeshed only accepts str.
-            status, search_data = client.uid(  # type: ignore[arg-type]
-                "search", None, "SINCE", since
+            status, search_data = client.uid(
+                "search", None, "SINCE", since  # type: ignore[arg-type]
             )
             if status != "OK":
                 raise RuntimeError("IMAP message search failed")
