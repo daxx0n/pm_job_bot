@@ -5,6 +5,7 @@ import time
 from collections.abc import AsyncIterator, Mapping
 from datetime import datetime
 from email.utils import parsedate_to_datetime
+from hashlib import sha256
 from typing import Any
 from xml.etree import ElementTree
 
@@ -158,7 +159,7 @@ class PublicRssSource(_RefreshLimitedSource):
         ]
         location = " ".join(locations)
         link = fields.get("link", "")
-        external_id = fields.get("guid") or link
+        external_id = _rss_external_id(fields.get("guid"), link)
         return Vacancy(
             source=self.name,
             external_id=external_id,
@@ -192,6 +193,15 @@ def _parse_rss(content: bytes) -> ElementTree.Element:
             content,
         )
         return ElementTree.fromstring(without_unbound_prefixes)
+
+
+def _rss_external_id(guid: str | None, link: str) -> str:
+    value = (guid or link).strip()
+    if link and link in value:
+        value = link
+    if len(value) <= 255:
+        return value
+    return f"sha256:{sha256(value.encode()).hexdigest()}"
 
 
 def _country(text: str) -> str | None:
@@ -256,5 +266,8 @@ def _rss_fields(item: ElementTree.Element) -> dict[str, str]:
         key = child.tag.rsplit("}", 1)[-1].casefold()
         value = "".join(child.itertext()).strip()
         if value:
-            fields[key] = f"{fields[key]} {value}".strip() if key in fields else value
+            if key not in fields:
+                fields[key] = value
+            elif fields[key] != value:
+                fields[key] = f"{fields[key]} {value}"
     return fields
