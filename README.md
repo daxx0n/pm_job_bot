@@ -76,9 +76,14 @@ RSS_REFRESH_SECONDS=1800
 HABR_CAREER_ENABLED=true
 TELEGRAM_PUBLIC_ENABLED=true
 TELEGRAM_PUBLIC_CHANNELS=product_project_job,pmclub,geekjobs
-TELEGRAM_PUBLIC_ADDITIONAL_CHANNELS=budujobs,it_vakansii_jobs,forproducts,jobforjunior,young_june,igaming_work,betting_job
+TELEGRAM_PUBLIC_RUSSIAN_CHANNELS=budujobs,it_vakansii_jobs,forproducts,jobforjunior,young_june,igaming_work,betting_job
+TELEGRAM_PUBLIC_ADDITIONAL_CHANNELS=
 PUBLIC_PAGES_REFRESH_SECONDS=1800
 ```
+
+Русскоязычная группа объединяется с ранее заданными
+`TELEGRAM_PUBLIC_ADDITIONAL_CHANNELS`, поэтому старый `.env` не блокирует новые
+источники. Пользовательские каналы по-прежнему можно добавлять отдельным списком.
 
 Чтобы временно вернуть международные англоязычные ленты, установите
 `INTERNATIONAL_SOURCES_ENABLED=true`. Их индивидуальные флаги и интервалы
