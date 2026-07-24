@@ -125,7 +125,7 @@ class EmailAlertSource:
             since = (datetime.now(UTC) - timedelta(days=self._lookback_days)).strftime(
                 "%d-%b-%Y"
             )
-            status, search_data = client.uid("search", "", "SINCE", since)
+            # imaplib uses None to omit the optional CHARSET; typeshed only accepts str.\n            status, search_data = client.uid(  # type: ignore[arg-type]\n                "search", None, "SINCE", since\n            )
             if status != "OK":
                 raise RuntimeError("IMAP message search failed")
 
