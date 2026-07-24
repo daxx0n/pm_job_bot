@@ -12,15 +12,30 @@ from email import message_from_bytes, policy
 from email.header import decode_header
 from email.message import Message
 from email.utils import parseaddr, parsedate_to_datetime
+from hashlib import sha256
 from html.parser import HTMLParser
 from urllib.parse import parse_qs, unquote, urlparse
 
 from job_bot.domain.models import EmploymentFormat, Vacancy
 
 _VACANCY_PATH = re.compile(r"/vacanc(?:y|ies)/(\d+)(?:/|$)", re.IGNORECASE)
+_PUBLIC_VACANCY_PATHS = {
+    "career.habr.com": re.compile(r"/vacancies/([^/?#]+)", re.IGNORECASE),
+    "geekjob.ru": re.compile(r"/vacancy/([^/?#]+)", re.IGNORECASE),
+    "getmatch.ru": re.compile(r"/vacancies/([^/?#]+)", re.IGNORECASE),
+    "jobs.dev.by": re.compile(r"/vacancies/([^/?#]+)", re.IGNORECASE),
+    "jobs.devby.io": re.compile(r"/vacancies/([^/?#]+)", re.IGNORECASE),
+}
 _URL_PATTERN = re.compile(r"https?://[^\s<>\"']+", re.IGNORECASE)
-_ALLOWED_HOST_SUFFIXES = ("rabota.by", "hh.ru", "hh.kz")
-_ALLOWED_SENDER_SUFFIXES = ("rabota.by", "hh.ru")
+_ALLOWED_SENDER_SUFFIXES = (
+    "rabota.by",
+    "hh.ru",
+    "habr.com",
+    "geekjob.ru",
+    "getmatch.ru",
+    "dev.by",
+    "devby.io",
+)
 _TITLE_MARKERS = (
     "project manager",
     "project coordinator",
@@ -185,7 +200,7 @@ def parse_alert_message(raw_message: bytes) -> list[Vacancy]:
         )
         vacancies.append(
             Vacancy(
-                source=EmailAlertSource.name,
+                source=_email_source(hostname),
                 external_id=external_id,
                 title=title,
                 url=url,
@@ -247,10 +262,23 @@ def _vacancy_url(raw_url: str, *, depth: int = 0) -> tuple[str, str] | None:
     match = _VACANCY_PATH.search(parsed.path)
     if match and any(
         hostname == suffix or hostname.endswith(f".{suffix}")
-        for suffix in _ALLOWED_HOST_SUFFIXES
+        for suffix in ("rabota.by", "hh.ru", "hh.kz")
     ):
         external_id = match.group(1)
         return external_id, f"{parsed.scheme}://{hostname}/vacancy/{external_id}"
+
+    site_pattern = _PUBLIC_VACANCY_PATHS.get(hostname)
+    if site_pattern is not None:
+        site_match = site_pattern.search(parsed.path)
+        if site_match:
+            canonical_path = site_match.group(0).rstrip("/")
+            raw_external_id = f"{hostname}:{site_match.group(1)}"
+            external_id = (
+                raw_external_id
+                if len(raw_external_id) <= 255
+                else f"sha256:{sha256(raw_external_id.encode()).hexdigest()}"
+            )
+            return external_id, f"{parsed.scheme}://{hostname}{canonical_path}"
 
     for values in parse_qs(parsed.query).values():
         for nested in values:
@@ -258,6 +286,14 @@ def _vacancy_url(raw_url: str, *, depth: int = 0) -> tuple[str, str] | None:
             if candidate is not None:
                 return candidate
     return None
+
+
+def _email_source(hostname: str) -> str:
+    if hostname == "rabota.by" or hostname.endswith(".rabota.by"):
+        return EmailAlertSource.name
+    if hostname in {"hh.ru", "hh.kz"} or hostname.endswith((".hh.ru", ".hh.kz")):
+        return EmailAlertSource.name
+    return f"Email/{hostname}"
 
 
 def _title_quality(value: str) -> int:
