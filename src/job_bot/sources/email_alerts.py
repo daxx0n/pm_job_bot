@@ -148,7 +148,7 @@ class EmailAlertSource:
             since = (datetime.now(UTC) - timedelta(days=self._lookback_days)).strftime(
                 "%d-%b-%Y"
             )
-            status, search_data = client.uid("search", "", "SINCE", since)
+            status, search_data = client.uid("search", None, "SINCE", since)  # type: ignore[arg-type]
             if status != "OK":
                 raise RuntimeError("IMAP message search failed")
 
