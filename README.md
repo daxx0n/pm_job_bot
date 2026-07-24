@@ -58,7 +58,7 @@ Telegram-сессии:
 - Himalayas — последние remote-вакансии.
 - Хабр Карьера — публичный каталог удалённых вакансий Project Manager;
 - публичные web-preview Telegram-каналов:
-  `@projects_jobs_feed`, `@product_project_job`, `@pmclub`, `@geekjobs`.
+  `@product_project_job`, `@pmclub`, `@geekjobs`.
 
 Они не требуют логина, API-ключей или cookies. Все ссылки в Telegram ведут на
 страницу исходного источника. Remotive проверяется раз в 6 часов в соответствии с
@@ -72,7 +72,7 @@ HIMALAYAS_ENABLED=true
 RSS_REFRESH_SECONDS=1800
 HABR_CAREER_ENABLED=true
 TELEGRAM_PUBLIC_ENABLED=true
-TELEGRAM_PUBLIC_CHANNELS=projects_jobs_feed,product_project_job,pmclub,geekjobs
+TELEGRAM_PUBLIC_CHANNELS=product_project_job,pmclub,geekjobs
 PUBLIC_PAGES_REFRESH_SECONDS=1800
 ```
 
@@ -80,7 +80,9 @@ PUBLIC_PAGES_REFRESH_SECONDS=1800
 HeadHunter/Rabota.by и их email-уведомления, не отключая публичные источники.
 
 Каждый источник изолирован: временная ошибка Хабр Карьеры или одного Telegram-канала
-не останавливает остальные. `@agile_jobs` является группой, а не публичным каналом
+не останавливает остальные.
+`@projects_jobs_feed` временно не включён по умолчанию: Telegram перенаправляет его
+публичную web-preview на страницу без доступной ленты сообщений. `@agile_jobs` является группой, а не публичным каналом
 с доступной лентой, поэтому он не подключён: для чтения потребовалась бы отдельная
 пользовательская Telegram-сессия.
 
