@@ -23,7 +23,12 @@ class VacancyStore(Protocol):
 
 
 class VacancyFeedbackStore(Protocol):
-    async def record_feedback(self, source_token: str, external_id: str, value: str) -> bool:
+    async def record_feedback(
+        self,
+        source_token: str,
+        external_id_token: str,
+        value: str,
+    ) -> bool:
         """Save feedback and return false when the referenced vacancy does not exist."""
         ...
 
@@ -91,13 +96,20 @@ class SqlAlchemyVacancyStore:
             await session.commit()
             return True
 
-    async def record_feedback(self, source_token: str, external_id: str, value: str) -> bool:
+    async def record_feedback(
+        self,
+        source_token: str,
+        external_id_token: str,
+        value: str,
+    ) -> bool:
         now = datetime.now(UTC)
         async with self._session_factory() as session:
             candidates = (
                 await session.execute(
-                    select(StoredVacancy.id, StoredVacancy.source).where(
-                        StoredVacancy.external_id == external_id,
+                    select(
+                        StoredVacancy.id,
+                        StoredVacancy.source,
+                        StoredVacancy.external_id,
                     )
                 )
             ).all()
@@ -105,7 +117,16 @@ class SqlAlchemyVacancyStore:
                 (
                     candidate.id
                     for candidate in candidates
-                    if compare_digest(feedback_source_token(candidate.source), source_token)
+                    if (
+                        compare_digest(
+                            feedback_source_token(candidate.source),
+                            source_token,
+                        )
+                        and compare_digest(
+                            feedback_external_id_token(candidate.external_id),
+                            external_id_token,
+                        )
+                    )
                 ),
                 None,
             )
@@ -147,3 +168,7 @@ class SqlAlchemyVacancyStore:
 
 def feedback_source_token(source: str) -> str:
     return sha256(source.encode()).hexdigest()[:8]
+
+
+def feedback_external_id_token(external_id: str) -> str:
+    return sha256(external_id.encode()).hexdigest()[:16]
