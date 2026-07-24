@@ -25,7 +25,7 @@ class Settings(BaseSettings):
     habr_career_enabled: bool = True
     telegram_public_enabled: bool = True
     telegram_public_channels: str = (
-        "projects_jobs_feed,product_project_job,pmclub,geekjobs"
+        "product_project_job,pmclub,geekjobs"
     )
     public_pages_refresh_seconds: int = 1_800
     email_alerts_enabled: bool = False
