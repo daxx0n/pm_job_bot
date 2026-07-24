@@ -15,10 +15,13 @@ from sqlalchemy import (
     Integer,
     String,
     UniqueConstraint,
+    inspect,
     select,
+    text,
     update,
 )
-from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
+from sqlalchemy.engine import Connection
+from sqlalchemy.ext.asyncio import AsyncEngine, AsyncSession, async_sessionmaker
 from sqlalchemy.orm import DeclarativeBase, Mapped, mapped_column
 
 from job_bot.domain.models import Decision, Vacancy
@@ -35,6 +38,10 @@ class VacancyStore(Protocol):
 
     async def record_match(self, vacancy: Vacancy, decision: Decision) -> None:
         """Save an accepted vacancy for the per-source recent-vacancy view."""
+        ...
+
+    async def refresh_match(self, vacancy: Vacancy, decision: Decision) -> None:
+        """Refresh an already accepted vacancy without sending it again."""
         ...
 
 
@@ -112,6 +119,7 @@ class StoredVacancy(Base):
     title: Mapped[str] = mapped_column(String(500), nullable=False)
     url: Mapped[str] = mapped_column(String(2000), nullable=False)
     payload: Mapped[dict[str, object]] = mapped_column(JSON, nullable=False, default=dict)
+    published_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
     first_seen_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), default=lambda: datetime.now(UTC), nullable=False
     )
@@ -169,13 +177,19 @@ class SqlAlchemyVacancyStore:
         async with self._session_factory() as session:
             existing = (
                 await session.execute(
-                    select(StoredVacancy.id, StoredVacancy.processed_at).where(
+                    select(StoredVacancy).where(
                         StoredVacancy.source == vacancy.source,
                         StoredVacancy.external_id == vacancy.external_id,
                     )
                 )
-            ).one_or_none()
+            ).scalar_one_or_none()
             if existing is not None:
+                existing.title = vacancy.title
+                existing.url = vacancy.url
+                existing.payload = vacancy.raw
+                if vacancy.published_at is not None:
+                    existing.published_at = vacancy.published_at
+                await session.commit()
                 return existing.processed_at is None
 
             session.add(
@@ -185,6 +199,7 @@ class SqlAlchemyVacancyStore:
                     title=vacancy.title,
                     url=vacancy.url,
                     payload=vacancy.raw,
+                    published_at=vacancy.published_at,
                 )
             )
             await session.commit()
@@ -263,27 +278,70 @@ class SqlAlchemyVacancyStore:
         async with self._session_factory() as session:
             existing = (
                 await session.execute(
-                    select(StoredMatchedVacancy.id).where(
+                    select(StoredMatchedVacancy).where(
                         StoredMatchedVacancy.source == vacancy.source,
                         StoredMatchedVacancy.external_id == vacancy.external_id,
                     )
                 )
             ).scalar_one_or_none()
-            if existing is not None:
+            if existing is None:
+                session.add(
+                    StoredMatchedVacancy(
+                        source=vacancy.source,
+                        external_id=vacancy.external_id,
+                        title=vacancy.title,
+                        url=vacancy.url,
+                        company=vacancy.company,
+                        location=vacancy.location or vacancy.country,
+                        published_at=vacancy.published_at,
+                        score=decision.score,
+                    )
+                )
+            else:
+                _update_match(existing, vacancy, decision)
+            await session.commit()
+
+    async def refresh_match(self, vacancy: Vacancy, decision: Decision) -> None:
+        if not decision.accepted:
+            return
+        async with self._session_factory() as session:
+            stored = (
+                await session.execute(
+                    select(StoredVacancy).where(
+                        StoredVacancy.source == vacancy.source,
+                        StoredVacancy.external_id == vacancy.external_id,
+                    )
+                )
+            ).scalar_one_or_none()
+            if stored is None:
                 return
 
-            session.add(
-                StoredMatchedVacancy(
-                    source=vacancy.source,
-                    external_id=vacancy.external_id,
-                    title=vacancy.title,
-                    url=vacancy.url,
-                    company=vacancy.company,
-                    location=vacancy.location or vacancy.country,
-                    published_at=vacancy.published_at,
-                    score=decision.score,
+            existing = (
+                await session.execute(
+                    select(StoredMatchedVacancy).where(
+                        StoredMatchedVacancy.source == vacancy.source,
+                        StoredMatchedVacancy.external_id == vacancy.external_id,
+                    )
                 )
-            )
+            ).scalar_one_or_none()
+            if existing is None and stored.notified_at is None:
+                return
+            if existing is None:
+                session.add(
+                    StoredMatchedVacancy(
+                        source=vacancy.source,
+                        external_id=vacancy.external_id,
+                        title=vacancy.title,
+                        url=vacancy.url,
+                        company=vacancy.company,
+                        location=vacancy.location or vacancy.country,
+                        published_at=vacancy.published_at,
+                        score=decision.score,
+                        matched_at=stored.notified_at or stored.first_seen_at,
+                    )
+                )
+            else:
+                _update_match(existing, vacancy, decision)
             await session.commit()
 
     async def source_states(
@@ -386,7 +444,10 @@ class SqlAlchemyVacancyStore:
                     await session.execute(
                         select(StoredMatchedVacancy)
                         .where(StoredMatchedVacancy.source == source)
-                        .order_by(StoredMatchedVacancy.matched_at.desc())
+                        .order_by(
+                            StoredMatchedVacancy.published_at.desc().nullslast(),
+                            StoredMatchedVacancy.matched_at.desc(),
+                        )
                         .limit(limit)
                     )
                 ).scalars()
@@ -430,13 +491,46 @@ class SqlAlchemyVacancyStore:
                         url=row.url,
                         company=None,
                         location=None,
-                        published_at=row.notified_at,
+                        published_at=row.published_at,
                         score=None,
                     )
                 )
                 if len(matches) == limit:
                     break
             return tuple(matches)
+
+
+def _update_match(
+    stored: StoredMatchedVacancy,
+    vacancy: Vacancy,
+    decision: Decision,
+) -> None:
+    stored.title = vacancy.title
+    stored.url = vacancy.url
+    stored.company = vacancy.company
+    stored.location = vacancy.location or vacancy.country
+    if vacancy.published_at is not None:
+        stored.published_at = vacancy.published_at
+    stored.score = decision.score
+
+
+async def initialize_database(engine: AsyncEngine) -> None:
+    async with engine.begin() as connection:
+        await connection.run_sync(_create_or_upgrade_schema)
+
+
+def _create_or_upgrade_schema(connection: Connection) -> None:
+    Base.metadata.create_all(connection)
+    vacancy_columns = {
+        column["name"] for column in inspect(connection).get_columns("vacancies")
+    }
+    if "published_at" not in vacancy_columns:
+        connection.execute(
+            text(
+                "ALTER TABLE vacancies "
+                "ADD COLUMN published_at TIMESTAMP WITH TIME ZONE"
+            )
+        )
 
 
 def feedback_source_token(source: str) -> str:

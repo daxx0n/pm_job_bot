@@ -17,7 +17,7 @@ from job_bot.sources.email_alerts import EmailAlertSource
 from job_bot.sources.headhunter import HeadHunterSource
 from job_bot.sources.public_feeds import PublicRssSource, RemotiveSource
 from job_bot.sources.public_pages import HabrCareerSource, TelegramPublicChannelSource
-from job_bot.storage import Base, SqlAlchemyVacancyStore
+from job_bot.storage import SqlAlchemyVacancyStore, initialize_database
 from job_bot.telegram.bot import TelegramNotifier, create_dispatcher
 
 logger = logging.getLogger(__name__)
@@ -42,8 +42,7 @@ async def main() -> None:
 
     bot = Bot(token=settings.telegram_bot_token.get_secret_value())
     engine = create_async_engine(settings.database_url)
-    async with engine.begin() as connection:
-        await connection.run_sync(Base.metadata.create_all)
+    await initialize_database(engine)
     store = SqlAlchemyVacancyStore(async_sessionmaker(engine, expire_on_commit=False))
 
     poll_task: asyncio.Task[None] | None = None

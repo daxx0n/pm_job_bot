@@ -37,6 +37,8 @@ class VacancyPipeline:
         async for vacancy in self._source.fetch():
             checked += 1
             if not await self._store.claim(vacancy):
+                decision = self._filter.evaluate(vacancy)
+                await self._store.refresh_match(vacancy, decision)
                 continue
 
             decision = self._filter.evaluate(vacancy)

@@ -86,6 +86,8 @@ async def test_telegram_preview_parses_public_project_vacancy() -> None:
     assert vacancy.experience_min_years == 2
     assert vacancy.required_english_level == "B1"
     assert vacancy.published_at is not None
+    assert vacancy.published_at.isoformat() == "2026-07-24T10:00:00+00:00"
+    assert vacancy.raw["published_at"] == "2026-07-24T10:00:00+00:00"
 
 
 @pytest.mark.asyncio

@@ -50,6 +50,9 @@ def test_parses_rabota_by_vacancy_link() -> None:
     assert vacancy.country == "Беларусь"
     assert vacancy.employment_format is EmploymentFormat.REMOTE
     assert vacancy.remote_from_belarus is True
+    assert vacancy.published_at is not None
+    assert vacancy.published_at.isoformat() == "2026-07-24T10:00:00+02:00"
+    assert vacancy.raw["published_at"] == "2026-07-24T10:00:00+02:00"
 
 
 def test_ignores_non_vacancy_links_and_unrelated_titles() -> None:

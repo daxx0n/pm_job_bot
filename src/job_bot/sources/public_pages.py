@@ -331,7 +331,11 @@ def _telegram_vacancy(source: str, post: dict[str, object]) -> Vacancy:
         experience_min_years=infer_experience_min_years(text),
         required_english_level=infer_required_english_level(text),
         published_at=_optional_datetime(post.get("datetime")),
-        raw={"post_url": post_url, "links": links},
+        raw={
+            "post_url": post_url,
+            "links": links,
+            "published_at": post.get("datetime"),
+        },
     )
 
 

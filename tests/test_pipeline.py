@@ -1,6 +1,7 @@
 import sys
 import unittest
 from collections.abc import AsyncIterator
+from datetime import datetime
 from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "src"))
@@ -24,6 +25,7 @@ class MemoryStore:
     def __init__(self) -> None:
         self.keys: dict[tuple[str, str], bool] = {}
         self.matches: list[tuple[Vacancy, Decision]] = []
+        self.refreshed: list[tuple[Vacancy, Decision]] = []
 
     async def claim(self, vacancy: Vacancy) -> bool:
         key = (vacancy.source, vacancy.external_id)
@@ -41,6 +43,9 @@ class MemoryStore:
             for item, _ in self.matches
         ):
             self.matches.append((vacancy, decision))
+
+    async def refresh_match(self, vacancy: Vacancy, decision: Decision) -> None:
+        self.refreshed.append((vacancy, decision))
 
 
 class RecordingNotifier:
@@ -97,6 +102,36 @@ class VacancyPipelineTests(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(second_result, (2, 0))
         self.assertEqual([item[0].external_id for item in notifier.sent], ["1"])
         self.assertEqual([item[0].external_id for item in store.matches], ["1"])
+        self.assertEqual(
+            [item[0].external_id for item in store.refreshed],
+            ["1", "2"],
+        )
+
+    async def test_refreshes_existing_metadata_without_resending(self) -> None:
+        original = self.vacancy("1", published_at=None)
+        refreshed = self.vacancy(
+            "1",
+            published_at=datetime.fromisoformat("2026-07-20T10:00:00+03:00"),
+        )
+        store = MemoryStore()
+        notifier = RecordingNotifier()
+        first_pipeline = VacancyPipeline(
+            source=FakeSource([original]),
+            store=store,
+            notifier=notifier,
+            eligibility_filter=EligibilityFilter(),
+        )
+        second_pipeline = VacancyPipeline(
+            source=FakeSource([refreshed]),
+            store=store,
+            notifier=notifier,
+            eligibility_filter=EligibilityFilter(),
+        )
+
+        self.assertEqual(await first_pipeline.run_once(), (1, 1))
+        self.assertEqual(await second_pipeline.run_once(), (1, 0))
+        self.assertEqual(len(notifier.sent), 1)
+        self.assertEqual(store.refreshed[0][0].published_at, refreshed.published_at)
 
     async def test_records_muted_match_without_sending_notification(self) -> None:
         vacancy = self.vacancy("1")
