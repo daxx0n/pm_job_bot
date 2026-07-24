@@ -17,6 +17,7 @@ class Settings(BaseSettings):
     hh_user_agent: str = "project-manager-job-bot/0.1"
     greenhouse_boards: str = ""
     lever_sites: str = ""
+    international_sources_enabled: bool = False
     remotive_enabled: bool = True
     remotive_refresh_seconds: int = 21_600
     we_work_remotely_enabled: bool = True
@@ -29,7 +30,10 @@ class Settings(BaseSettings):
     telegram_public_channels: str = (
         "product_project_job,pmclub,geekjobs"
     )
-    telegram_public_additional_channels: str = "budujobs,remotejobss"
+    telegram_public_additional_channels: str = (
+        "budujobs,it_vakansii_jobs,forproducts,jobforjunior,"
+        "young_june,igaming_work,betting_job"
+    )
     public_pages_refresh_seconds: int = 1_800
     email_alerts_enabled: bool = False
     email_imap_host: str = "imap.gmail.com"
