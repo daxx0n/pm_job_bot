@@ -45,8 +45,60 @@ PostgreSQL и в дальнейшем может использоваться д
 зарплат в USD, PostgreSQL-хранилище, защита от дублей и повторная доставка после
 временной ошибки Telegram.
 
-HeadHunter проверяется каждые 5 минут. В первой версии источник запрашивает свежие
-remote/hybrid-вакансии для Беларуси через официальный API.
+Источники проверяются каждые 5 минут. Пока доступ к поиску HeadHunter API не выдан,
+`HH_ENABLED=false` отключает этот источник, не затрагивая остальные.
+
+### Публичные источники без регистрации
+
+По умолчанию подключены три источника, которые официально предоставляют публичные
+фиды вакансий:
+
+- Remotive — категория Project Management;
+- We Work Remotely — категория Management & Finance;
+- Himalayas — последние remote-вакансии.
+
+Они не требуют логина, API-ключей или cookies. Все ссылки в Telegram ведут на
+страницу исходного источника. Remotive проверяется раз в 6 часов в соответствии с
+рекомендованным лимитом, RSS-источники — раз в 30 минут:
+
+```dotenv
+REMOTIVE_ENABLED=true
+REMOTIVE_REFRESH_SECONDS=21600
+WE_WORK_REMOTELY_ENABLED=true
+HIMALAYAS_ENABLED=true
+RSS_REFRESH_SECONDS=1800
+```
+
+`HH_ENABLED=false` и `EMAIL_ALERTS_ENABLED=false` полностью исключают
+HeadHunter/Rabota.by и их email-уведомления, не отключая публичные источники.
+
+### Email-уведомления Rabota.by через Gmail
+
+Источник читает только официальные письма с вакансиями и извлекает из них ссылки
+`rabota.by`/HeadHunter. Сайт не парсится, пароль от Rabota.by не используется, а
+повторные вакансии отсекаются PostgreSQL.
+
+1. Создайте на Rabota.by сохранённые поиски для remote-вакансий и отдельный поиск
+   hybrid-вакансий только по Беларуси.
+2. Включите email-уведомления для этих поисков.
+3. В аккаунте Google включите двухэтапную аутентификацию.
+4. Создайте отдельный пароль приложения Google для бота.
+5. Добавьте в `.env`:
+
+```dotenv
+HH_ENABLED=false
+EMAIL_ALERTS_ENABLED=true
+EMAIL_IMAP_HOST=imap.gmail.com
+EMAIL_IMAP_PORT=993
+EMAIL_IMAP_USERNAME=your-email@gmail.com
+EMAIL_IMAP_APP_PASSWORD=your-16-character-app-password
+EMAIL_IMAP_FOLDER=INBOX
+EMAIL_LOOKBACK_DAYS=2
+EMAIL_MAX_MESSAGES=50
+```
+
+Обычный пароль Gmail, пароль Rabota.by и cookies сайту не передаются. Пароль
+приложения Google нельзя отправлять в чат или коммитить в Git.
 
 Карьерные страницы Greenhouse и Lever подключаются списками идентификаторов через
 `GREENHOUSE_BOARDS` и `LEVER_SITES` в `.env`, например:
@@ -80,9 +132,8 @@ mypy src
 ## Планируемые источники
 
 1. HeadHunter API: rabota.by, hh.ru, hh.kz и другие региональные сайты.
-2. Публичные карьерные страницы Greenhouse и Lever.
-3. Telegram-каналы через отдельный read-only клиент.
-4. LinkedIn Job Alerts через email, без прямого парсинга LinkedIn.
+2. Telegram-каналы через отдельный read-only клиент.
+3. LinkedIn Job Alerts через email, без прямого парсинга LinkedIn.
 
 ## Безопасность
 

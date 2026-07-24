@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from pydantic import SecretStr, field_validator
+from pydantic import SecretStr, field_validator, model_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 
@@ -17,6 +17,19 @@ class Settings(BaseSettings):
     hh_user_agent: str = "project-manager-job-bot/0.1"
     greenhouse_boards: str = ""
     lever_sites: str = ""
+    remotive_enabled: bool = True
+    remotive_refresh_seconds: int = 21_600
+    we_work_remotely_enabled: bool = True
+    himalayas_enabled: bool = True
+    rss_refresh_seconds: int = 1_800
+    email_alerts_enabled: bool = False
+    email_imap_host: str = "imap.gmail.com"
+    email_imap_port: int = 993
+    email_imap_username: str = ""
+    email_imap_app_password: SecretStr | None = None
+    email_imap_folder: str = "INBOX"
+    email_lookback_days: int = 2
+    email_max_messages: int = 50
     log_level: str = "INFO"
 
     model_config = SettingsConfigDict(
@@ -37,6 +50,22 @@ class Settings(BaseSettings):
 
     def lever_site_names(self) -> tuple[str, ...]:
         return _csv_values(self.lever_sites)
+
+    @model_validator(mode="after")
+    def validate_email_alert_settings(self) -> Settings:
+        if self.email_alerts_enabled:
+            if not self.email_imap_username.strip():
+                raise ValueError(
+                    "EMAIL_IMAP_USERNAME is required when EMAIL_ALERTS_ENABLED=true"
+                )
+            if (
+                self.email_imap_app_password is None
+                or not self.email_imap_app_password.get_secret_value().strip()
+            ):
+                raise ValueError(
+                    "EMAIL_IMAP_APP_PASSWORD is required when EMAIL_ALERTS_ENABLED=true"
+                )
+        return self
 
 
 def _csv_values(value: str) -> tuple[str, ...]:

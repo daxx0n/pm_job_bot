@@ -4,7 +4,11 @@ from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "src"))
 
-from job_bot.domain.text_analysis import infer_required_english_level, plain_text
+from job_bot.domain.text_analysis import (
+    infer_experience_min_years,
+    infer_required_english_level,
+    plain_text,
+)
 
 
 class TextAnalysisTests(unittest.TestCase):
@@ -28,6 +32,14 @@ class TextAnalysisTests(unittest.TestCase):
         self.assertIsNone(
             infer_required_english_level("English B2 будет плюсом, но не обязателен.")
         )
+
+    def test_detects_fluent_english_as_c1(self) -> None:
+        self.assertEqual(infer_required_english_level("Fluent English is required."), "C1")
+
+    def test_extracts_minimum_experience(self) -> None:
+        text = "At least 2 years experience; 4 years of delivery experience is a plus."
+
+        self.assertEqual(infer_experience_min_years(text), 2)
 
 
 if __name__ == "__main__":

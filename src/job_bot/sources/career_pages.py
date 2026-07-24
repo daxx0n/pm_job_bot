@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import logging
 from collections.abc import AsyncIterator, Mapping
 from datetime import datetime
 from typing import Any
@@ -7,8 +8,14 @@ from typing import Any
 import httpx
 
 from job_bot.domain.models import EmploymentFormat, Vacancy
-from job_bot.domain.text_analysis import infer_required_english_level, plain_text
+from job_bot.domain.text_analysis import (
+    infer_experience_min_years,
+    infer_required_english_level,
+    plain_text,
+)
 from job_bot.sources.base import VacancySource
+
+logger = logging.getLogger(__name__)
 
 _COUNTRY_MARKERS = {
     "азербайджан": "Азербайджан",
@@ -58,8 +65,11 @@ class CompositeSource:
 
     async def fetch(self) -> AsyncIterator[Vacancy]:
         for source in self._sources:
-            async for vacancy in source.fetch():
-                yield vacancy
+            try:
+                async for vacancy in source.fetch():
+                    yield vacancy
+            except Exception:
+                logger.exception("Vacancy source failed: %s", source.name)
 
 
 class GreenhouseSource:
@@ -94,6 +104,7 @@ class GreenhouseSource:
             country=_country(context),
             employment_format=_employment_format(context),
             remote_from_belarus=_remote_from_belarus(context),
+            experience_min_years=infer_experience_min_years(description),
             required_english_level=infer_required_english_level(description),
             published_at=_optional_datetime(job.get("updated_at")),
             raw=dict(job),
@@ -138,6 +149,7 @@ class LeverSource:
             country=_country(context),
             employment_format=_employment_format(context),
             remote_from_belarus=_remote_from_belarus(context),
+            experience_min_years=infer_experience_min_years(description),
             required_english_level=infer_required_english_level(description),
             raw=dict(job),
         )
