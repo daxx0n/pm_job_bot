@@ -84,6 +84,40 @@ class PublicFeedSourceTests(unittest.IsolatedAsyncioTestCase):
         self.assertTrue(vacancy.remote_from_belarus)
         self.assertEqual(vacancy.experience_min_years, 2)
 
+    async def test_rss_recovers_from_unbound_himalayas_prefix(self) -> None:
+        rss = """<?xml version="1.0" encoding="UTF-8"?>
+        <rss>
+          <channel>
+            <item>
+              <title>Junior Project Manager</title>
+              <link>https://himalayas.example/jobs/unbound-prefix</link>
+              <guid>unbound-prefix</guid>
+              <content:encoded>
+                <![CDATA[<p>1 year of experience. English B1.</p>]]>
+              </content:encoded>
+              <himalayasJobs:companyName>Example Inc</himalayasJobs:companyName>
+              <himalayasJobs:locationRestriction>Worldwide</himalayasJobs:locationRestriction>
+            </item>
+          </channel>
+        </rss>"""
+
+        def handler(request: httpx.Request) -> httpx.Response:
+            return httpx.Response(200, text=rss)
+
+        async with httpx.AsyncClient(transport=httpx.MockTransport(handler)) as client:
+            source = PublicRssSource(
+                client,
+                name="Himalayas",
+                url="https://himalayas.example/rss",
+            )
+            vacancies = [vacancy async for vacancy in source.fetch()]
+
+        vacancy = vacancies[0]
+        self.assertEqual(vacancy.company, "Example Inc")
+        self.assertEqual(vacancy.external_id, "unbound-prefix")
+        self.assertTrue(vacancy.remote_from_belarus)
+        self.assertEqual(vacancy.experience_min_years, 1)
+
     async def test_rss_marks_specific_country_as_unavailable_from_belarus(self) -> None:
         rss = """<rss><channel><item>
           <title>Example: Project Manager</title>
