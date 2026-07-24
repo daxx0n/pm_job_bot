@@ -58,7 +58,7 @@ Telegram-сессии:
 - Himalayas — последние remote-вакансии.
 - Хабр Карьера — публичный каталог удалённых вакансий Project Manager;
 - публичные web-preview Telegram-каналов:
-  `@projects_jobs_feed`, `@product_project_job`, `@pmclub`, `@geekjobs`.
+  `@product_project_job`, `@pmclub`, `@geekjobs`.
 
 Они не требуют логина, API-ключей или cookies. Все ссылки в Telegram ведут на
 страницу исходного источника. Remotive проверяется раз в 6 часов в соответствии с
@@ -72,7 +72,7 @@ HIMALAYAS_ENABLED=true
 RSS_REFRESH_SECONDS=1800
 HABR_CAREER_ENABLED=true
 TELEGRAM_PUBLIC_ENABLED=true
-TELEGRAM_PUBLIC_CHANNELS=projects_jobs_feed,product_project_job,pmclub,geekjobs
+TELEGRAM_PUBLIC_CHANNELS=product_project_job,pmclub,geekjobs
 PUBLIC_PAGES_REFRESH_SECONDS=1800
 ```
 
