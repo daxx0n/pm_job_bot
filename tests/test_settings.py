@@ -50,6 +50,7 @@ def test_public_channels_are_deduplicated() -> None:
     settings = Settings(
         telegram_bot_token=SecretStr("test-token"),
         telegram_public_channels="pmclub,budujobs",
+        telegram_public_russian_channels="",
         telegram_public_additional_channels="budujobs,remotejobss",
     )
 
@@ -58,3 +59,18 @@ def test_public_channels_are_deduplicated() -> None:
         "budujobs",
         "remotejobss",
     )
+
+
+def test_existing_additional_channels_do_not_replace_russian_defaults() -> None:
+    settings = Settings(
+        telegram_bot_token=SecretStr("test-token"),
+        telegram_public_additional_channels="budujobs,remotejobss",
+    )
+
+    channels = settings.telegram_public_channel_names()
+
+    assert "it_vakansii_jobs" in channels
+    assert "igaming_work" in channels
+    assert "betting_job" in channels
+    assert channels.count("budujobs") == 1
+    assert "remotejobss" in channels
