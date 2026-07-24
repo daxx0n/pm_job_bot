@@ -131,7 +131,7 @@ class PublicRssSource(_RefreshLimitedSource):
         response = await self._client.get(self._url)
         response.raise_for_status()
         try:
-            root = ElementTree.fromstring(response.content)
+            root = _parse_rss(response.content)
         except ElementTree.ParseError as error:
             raise RuntimeError(f"Invalid RSS response from {self.name}") from error
         self._mark_fetched()
@@ -178,6 +178,20 @@ class PublicRssSource(_RefreshLimitedSource):
 
 def _mapping(value: object) -> Mapping[str, Any]:
     return value if isinstance(value, Mapping) else {}
+
+
+def _parse_rss(content: bytes) -> ElementTree.Element:
+    try:
+        return ElementTree.fromstring(content)
+    except ElementTree.ParseError as error:
+        if "unbound prefix" not in str(error):
+            raise
+        without_unbound_prefixes = re.sub(
+            rb"<(/?)[A-Za-z_][\w.-]*:([A-Za-z_][\w.-]*)(?=[\s>/])",
+            rb"<\1\2",
+            content,
+        )
+        return ElementTree.fromstring(without_unbound_prefixes)
 
 
 def _country(text: str) -> str | None:
