@@ -22,6 +22,7 @@ class Vacancy:
     description: str = ""
     company: str | None = None
     country: str | None = None
+    location: str | None = None
     employment_format: EmploymentFormat = EmploymentFormat.UNKNOWN
     remote_from_belarus: bool | None = None
     experience_min_years: float | None = None
@@ -33,6 +34,7 @@ class Vacancy:
     salary_max: int | None = None
     salary_currency: str | None = None
     published_at: datetime | None = None
+    publication_time_known: bool = True
     raw: dict[str, Any] = field(default_factory=dict, compare=False, repr=False)
 
 

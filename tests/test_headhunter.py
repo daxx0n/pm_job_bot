@@ -93,6 +93,7 @@ class HeadHunterSourceTests(unittest.IsolatedAsyncioTestCase):
         vacancy = vacancies[0]
         self.assertEqual(vacancy.external_id, "123")
         self.assertEqual(vacancy.country, "Беларусь")
+        self.assertEqual(vacancy.location, "Минск")
         self.assertEqual(vacancy.employment_format, EmploymentFormat.REMOTE)
         self.assertEqual(vacancy.experience_min_years, 1)
         self.assertEqual(vacancy.experience_max_years, 3)

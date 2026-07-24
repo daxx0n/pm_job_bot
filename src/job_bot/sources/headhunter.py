@@ -213,6 +213,7 @@ class HeadHunterSource:
             description=description,
             company=_optional_string(employer.get("name")),
             country=self._country_by_area.get(str(_mapping(item.get("area")).get("id"))),
+            location=_optional_string(_mapping(item.get("area")).get("name")),
             employment_format=_employment_format(work_formats),
             remote_from_belarus=_remote_from_belarus(item, self._country_by_area),
             experience_min_years=experience_range[0],

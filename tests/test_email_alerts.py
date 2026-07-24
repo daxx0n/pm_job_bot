@@ -27,6 +27,8 @@ def test_parses_rabota_by_vacancy_link() -> None:
         _message(
             """
             <html><body>
+              <p>Компания: Example</p>
+              <p>Локация: Минск, Беларусь</p>
               <a href="https://rabota.by/vacancy/123456?from=email">
                 Junior Project Manager
               </a>
@@ -43,6 +45,8 @@ def test_parses_rabota_by_vacancy_link() -> None:
     assert vacancy.external_id == "123456"
     assert vacancy.title == "Junior Project Manager"
     assert vacancy.url == "https://rabota.by/vacancy/123456"
+    assert vacancy.company == "Example"
+    assert vacancy.location == "Минск, Беларусь"
     assert vacancy.country == "Беларусь"
     assert vacancy.employment_format is EmploymentFormat.REMOTE
     assert vacancy.remote_from_belarus is True
@@ -125,7 +129,7 @@ def test_parses_habr_career_alert_from_official_sender() -> None:
     assert vacancies[0].external_id == "career.habr.com:1000123"
 
 
-def test_imap_search_omits_optional_charset(monkeypatch: pytest.MonkeyPatch) -> None:
+def test_imap_search_uses_string_charset(monkeypatch: pytest.MonkeyPatch) -> None:
     class FakeImapClient:
         def __init__(self) -> None:
             self.uid_calls: list[tuple[str, tuple[object, ...]]] = []
@@ -157,4 +161,4 @@ def test_imap_search_omits_optional_charset(monkeypatch: pytest.MonkeyPatch) -> 
 
     assert source._fetch_sync() == []
     assert client.uid_calls[0][0] == "search"
-    assert client.uid_calls[0][1][0] is None
+    assert client.uid_calls[0][1][0] == ""

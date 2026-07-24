@@ -43,6 +43,23 @@ _TITLE_MARKERS = (
     "менеджер проектов",
     "руководитель проектов",
 )
+_NEXT_FIELD = (
+    r"(?=\s+(?:компания|company|работодатель|employer|локация|location|"
+    r"город|география|формат|format|зарплата|salary|опыт|experience)"
+    r"\s*[:—–-]|\s*\n|$)"
+)
+_FIELD_PATTERNS = {
+    "company": re.compile(
+        r"(?:^|\s)(?:компания|company|работодатель|employer)\s*[:—–-]\s*"
+        rf"(.{{2,100}}?){_NEXT_FIELD}",
+        re.IGNORECASE,
+    ),
+    "location": re.compile(
+        r"(?:^|\s)(?:локация|location|город|география)\s*[:—–-]\s*"
+        rf"(.{{2,100}}?){_NEXT_FIELD}",
+        re.IGNORECASE,
+    ),
+}
 
 
 @dataclass(frozen=True, slots=True)
@@ -64,6 +81,9 @@ class _HtmlContentParser(HTMLParser):
         tag: str,
         attrs: list[tuple[str, str | None]],
     ) -> None:
+        if tag.casefold() == "br":
+            self.text_parts.append("\n")
+            return
         if tag.casefold() != "a":
             return
         self._href = next((value for key, value in attrs if key == "href"), None)
@@ -78,7 +98,10 @@ class _HtmlContentParser(HTMLParser):
             self._anchor_parts.append(value)
 
     def handle_endtag(self, tag: str) -> None:
-        if tag.casefold() != "a" or self._href is None:
+        normalized_tag = tag.casefold()
+        if normalized_tag in {"p", "div", "li", "tr"}:
+            self.text_parts.append("\n")
+        if normalized_tag != "a" or self._href is None:
             return
         self.links.append(_Link(self._href, " ".join(self._anchor_parts).strip()))
         self._href = None
@@ -125,10 +148,7 @@ class EmailAlertSource:
             since = (datetime.now(UTC) - timedelta(days=self._lookback_days)).strftime(
                 "%d-%b-%Y"
             )
-            # imaplib uses None to omit the optional CHARSET; typeshed only accepts str.
-            status, search_data = client.uid(
-                "search", None, "SINCE", since  # type: ignore[arg-type]
-            )
+            status, search_data = client.uid("search", "", "SINCE", since)
             if status != "OK":
                 raise RuntimeError("IMAP message search failed")
 
@@ -191,6 +211,7 @@ def parse_alert_message(raw_message: bytes) -> list[Vacancy]:
     published_at = _message_datetime(message)
     message_id = _decoded_header(message.get("Message-ID"))
     context = " ".join((subject, *plain_parts))
+    single_vacancy = len(candidates) == 1
     vacancies: list[Vacancy] = []
     for external_id, (url, title) in candidates.items():
         if not title or _title_quality(title) == 0:
@@ -208,7 +229,11 @@ def parse_alert_message(raw_message: bytes) -> list[Vacancy]:
                 title=title,
                 url=url,
                 description="",
+                company=_field_value(context, "company") if single_vacancy else None,
                 country=country,
+                location=(
+                    _field_value(context, "location") if single_vacancy else country
+                ),
                 employment_format=_employment_format(context),
                 remote_from_belarus=True if country == "Беларусь" else None,
                 published_at=published_at,
@@ -315,3 +340,8 @@ def _employment_format(value: str) -> EmploymentFormat:
     if "удален" in normalized or "удалён" in normalized or "remote" in normalized:
         return EmploymentFormat.REMOTE
     return EmploymentFormat.UNKNOWN
+
+
+def _field_value(text: str, field: str) -> str | None:
+    match = _FIELD_PATTERNS[field].search(text)
+    return match.group(1).strip(" .") if match else None
