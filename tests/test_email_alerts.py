@@ -1,7 +1,9 @@
 from email.message import EmailMessage
 
+import pytest
+
 from job_bot.domain.models import EmploymentFormat
-from job_bot.sources.email_alerts import parse_alert_message
+from job_bot.sources.email_alerts import EmailAlertSource, parse_alert_message
 
 
 def _message(
@@ -121,3 +123,38 @@ def test_parses_habr_career_alert_from_official_sender() -> None:
     assert len(vacancies) == 1
     assert vacancies[0].source == "Email/career.habr.com"
     assert vacancies[0].external_id == "career.habr.com:1000123"
+
+
+def test_imap_search_uses_string_charset(monkeypatch: pytest.MonkeyPatch) -> None:
+    class FakeImapClient:
+        def __init__(self) -> None:
+            self.uid_calls: list[tuple[str, tuple[object, ...]]] = []
+
+        def login(self, username: str, password: str) -> None:
+            pass
+
+        def select(self, folder: str, *, readonly: bool) -> tuple[str, list[bytes]]:
+            return "OK", []
+
+        def uid(self, command: str, *args: object) -> tuple[str, list[bytes]]:
+            self.uid_calls.append((command, args))
+            return "OK", [b""]
+
+        def logout(self) -> None:
+            pass
+
+    client = FakeImapClient()
+    monkeypatch.setattr(
+        "job_bot.sources.email_alerts.imaplib.IMAP4_SSL",
+        lambda host, port: client,
+    )
+    source = EmailAlertSource(
+        host="imap.example.com",
+        port=993,
+        username="bot@example.com",
+        app_password="app-password",
+    )
+
+    assert source._fetch_sync() == []
+    assert client.uid_calls[0][0] == "search"
+    assert client.uid_calls[0][1][0] == ""
