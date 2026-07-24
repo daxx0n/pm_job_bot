@@ -12,7 +12,9 @@ logger = logging.getLogger(__name__)
 
 
 class VacancyNotifier(Protocol):
-    async def send_vacancy(self, vacancy: Vacancy, decision: Decision) -> None: ...
+    async def send_vacancy(self, vacancy: Vacancy, decision: Decision) -> bool:
+        """Send a vacancy and return false when its source is muted."""
+        ...
 
 
 class VacancyPipeline:
@@ -48,7 +50,8 @@ class VacancyPipeline:
                 await self._store.complete(vacancy, notified=False)
                 continue
 
-            await self._notifier.send_vacancy(vacancy, decision)
-            await self._store.complete(vacancy, notified=True)
-            sent += 1
+            await self._store.record_match(vacancy, decision)
+            notified = await self._notifier.send_vacancy(vacancy, decision)
+            await self._store.complete(vacancy, notified=notified)
+            sent += int(notified)
         return checked, sent

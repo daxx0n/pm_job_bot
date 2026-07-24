@@ -5,7 +5,14 @@ from pathlib import Path
 sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "src"))
 
 from job_bot.storage import feedback_external_id_token, feedback_source_token
-from job_bot.telegram.bot import _feedback_data, _parse_feedback_data
+from job_bot.telegram.bot import (
+    _feedback_data,
+    _parse_feedback_data,
+    _source_map,
+    _source_token,
+    _sources_keyboard,
+    _sources_text,
+)
 
 
 class TelegramFeedbackTests(unittest.TestCase):
@@ -39,6 +46,28 @@ class TelegramFeedbackTests(unittest.TestCase):
         )
 
         self.assertLessEqual(len(data.encode()), 64)
+
+    def test_source_tokens_round_trip_through_source_map(self) -> None:
+        sources = ("HeadHunter", "Telegram/@igaming_work")
+
+        self.assertEqual(
+            _source_map(sources)[_source_token("Telegram/@igaming_work")],
+            "Telegram/@igaming_work",
+        )
+
+    def test_sources_menu_shows_states_and_bulk_actions(self) -> None:
+        states = {"HeadHunter": True, "Telegram/@igaming_work": False}
+
+        text = _sources_text(states)
+        keyboard = _sources_keyboard(states)
+
+        self.assertIn("Включено: 1 из 2", text)
+        self.assertEqual(keyboard.inline_keyboard[0][0].text, "✅ HeadHunter")
+        self.assertEqual(
+            keyboard.inline_keyboard[1][0].text,
+            "⛔ Telegram/@igaming_work",
+        )
+        self.assertEqual(keyboard.inline_keyboard[-1][0].text, "🕘 Последние вакансии")
 
 
 if __name__ == "__main__":

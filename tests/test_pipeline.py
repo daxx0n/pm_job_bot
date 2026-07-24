@@ -23,6 +23,7 @@ class FakeSource:
 class MemoryStore:
     def __init__(self) -> None:
         self.keys: dict[tuple[str, str], bool] = {}
+        self.matches: list[tuple[Vacancy, Decision]] = []
 
     async def claim(self, vacancy: Vacancy) -> bool:
         key = (vacancy.source, vacancy.external_id)
@@ -34,17 +35,28 @@ class MemoryStore:
     async def complete(self, vacancy: Vacancy, *, notified: bool) -> None:
         self.keys[(vacancy.source, vacancy.external_id)] = True
 
+    async def record_match(self, vacancy: Vacancy, decision: Decision) -> None:
+        if not any(
+            item.source == vacancy.source and item.external_id == vacancy.external_id
+            for item, _ in self.matches
+        ):
+            self.matches.append((vacancy, decision))
+
 
 class RecordingNotifier:
-    def __init__(self) -> None:
+    def __init__(self, *, enabled: bool = True) -> None:
         self.sent: list[tuple[Vacancy, Decision]] = []
+        self.enabled = enabled
 
-    async def send_vacancy(self, vacancy: Vacancy, decision: Decision) -> None:
+    async def send_vacancy(self, vacancy: Vacancy, decision: Decision) -> bool:
+        if not self.enabled:
+            return False
         self.sent.append((vacancy, decision))
+        return True
 
 
 class FailingNotifier:
-    async def send_vacancy(self, vacancy: Vacancy, decision: Decision) -> None:
+    async def send_vacancy(self, vacancy: Vacancy, decision: Decision) -> bool:
         raise RuntimeError("temporary Telegram failure")
 
 
@@ -84,6 +96,24 @@ class VacancyPipelineTests(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(first_result, (2, 1))
         self.assertEqual(second_result, (2, 0))
         self.assertEqual([item[0].external_id for item in notifier.sent], ["1"])
+        self.assertEqual([item[0].external_id for item in store.matches], ["1"])
+
+    async def test_records_muted_match_without_sending_notification(self) -> None:
+        vacancy = self.vacancy("1")
+        store = MemoryStore()
+        notifier = RecordingNotifier(enabled=False)
+        pipeline = VacancyPipeline(
+            source=FakeSource([vacancy]),
+            store=store,
+            notifier=notifier,
+            eligibility_filter=EligibilityFilter(),
+        )
+
+        result = await pipeline.run_once()
+
+        self.assertEqual(result, (1, 0))
+        self.assertEqual(notifier.sent, [])
+        self.assertEqual([item[0].external_id for item in store.matches], ["1"])
 
     async def test_retries_vacancy_after_notification_failure(self) -> None:
         vacancy = self.vacancy("1")
